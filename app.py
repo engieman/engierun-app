@@ -36,11 +36,11 @@ def _get(url, method="get"):
 SAMPLE = {}
 
 AXES = {
-    "Short Speed (800/1500)": ["800m", "1500m", "Mile"],
+    "Short Speed (800/1500)": ["800m", "1000m", "1500m", "Mile"],
     "3k Speed-Endurance": ["1500m", "Mile", "3000m", "5000m"],
     "5k/10k Aerobic Engine": ["5000m", "10000m"],
 }
-EVENTS = ["800m", "1500m", "Mile", "3000m", "5000m", "10000m"]
+EVENTS = ["800m", "1000m", "1500m", "Mile", "3000m", "5000m", "10000m"]
 CATEGORIES = ["Male", "Female"]
 
 EVENT_PATTERNS = [
@@ -50,6 +50,7 @@ EVENT_PATTERNS = [
     ("3000m",  r"3000|3\s?k\b"),
     ("1500m",  r"1500"),
     ("Mile",   r"\bmile\b|1609"),
+    ("1000m",  r"\b1000\b|1\s?k\b"),
     ("800m",   r"\b800\b"),
     ("400m",   r"\b400\b"),
     ("200m",   r"\b200\b"),
@@ -59,7 +60,7 @@ EVENT_PATTERNS = [
 
 EVENT_BOUNDS = {
     "60m": (6, 12), "100m": (9, 18), "200m": (18, 40), "400m": (42, 75),
-    "800m": (95, 150), "1500m": (185, 320), "Mile": (210, 360),
+    "800m": (95, 150), "1000m": (125, 200), "1500m": (185, 320), "Mile": (210, 360),
     "3000m": (400, 700), "5000m": (750, 1200), "10000m": (1550, 2400),
 }
 
@@ -557,8 +558,11 @@ def sort_athletes(athletes, sort_by):
             s = time_to_seconds(kv[1]["marks"].get(ev))
             return (s is None, s if s is not None else 0)
         items.sort(key=key)
-    else:  # default: name
-        items.sort(key=lambda kv: kv[0].lower())
+    else:  # default: last name, then full name as tiebreak
+        def name_key(kv):
+            parts = kv[0].strip().split()
+            return (parts[-1].lower() if parts else kv[0].lower(), kv[0].lower())
+        items.sort(key=name_key)
     return dict(items)
 
 
@@ -637,7 +641,8 @@ def compare():
     athletes = load_athletes()
     cat_filter = request.args.get("cat", "")
     shown = filter_by_category(athletes, cat_filter)
-    names = sorted(shown.keys(), key=lambda n: n.lower())
+    names = sorted(shown.keys(),
+                   key=lambda n: (n.strip().split()[-1].lower() if n.strip() else n.lower(), n.lower()))
     a_name = request.args.get("a")
     b_name = request.args.get("b")
     comparison = None
