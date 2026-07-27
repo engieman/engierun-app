@@ -33,14 +33,7 @@ def _get(url, method="get"):
     return getattr(httpx, method)(url, **kwargs)
 
 
-SAMPLE = {
-    "Alex Rivera": {"school": "State University",
-        "marks": {"800m": "1:52.30", "1500m": "3:48.10", "5000m": "14:20.50", "10000m": "30:15.00"}},
-    "Jordan Blake": {"school": "Coastal College",
-        "marks": {"800m": "1:49.80", "1500m": "3:45.60", "5000m": "14:35.20", "10000m": "31:02.40"}},
-    "Sam Okafor": {"school": "Northern Tech",
-        "marks": {"800m": "1:47.90", "1500m": "3:44.20", "5000m": "14:50.00", "10000m": "31:40.00"}},
-}
+SAMPLE = {}
 
 # Runner-type axes: each maps to the events that define that quality.
 AXES = {
@@ -88,36 +81,89 @@ def clean_name(name):
     return name.strip() or "Unknown"
 
 
-def load_athletes():
-    if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w") as f:
-            json.dump(SAMPLE, f, indent=2)
-    try:
-        with open(DATA_FILE) as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            raise ValueError("athletes file is not a JSON object")
-        # Keep only well-formed athletes so one bad entry can't break everything.
-        clean = {}
-        for name, d in data.items():
-            if isinstance(d, dict) and isinstance(d.get("marks"), dict):
-                clean[clean_name(name)] = {"school": d.get("school", ""),
-                               "marks": {k: str(v) for k, v in d["marks"].items()}}
-        return clean
-    except Exception as e:
-        print("athletes.json unreadable, backing up and reseeding:", e)
+# --- Storage: use Postgres if DATABASE_URL is set (on Render), else JSON (local) ---
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    import psycopg2
+    # Render's internal URL sometimes starts with postgres:// ; psycopg2 wants postgresql://
+    _DB = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+    def _db_conn():
+        return psycopg2.connect(_DB)
+
+    def _db_init():
+        with _db_conn() as conn, conn.cursor() as cur:
+            cur.execute("""CREATE TABLE IF NOT EXISTS athletes (
+                               name TEXT PRIMARY KEY,
+                               school TEXT,
+                               marks TEXT)""")
+            cur.execute("SELECT COUNT(*) FROM athletes")
+            if cur.fetchone()[0] == 0:
+                for name, d in SAMPLE.items():
+                    cur.execute("INSERT INTO athletes (name, school, marks) VALUES (%s,%s,%s)",
+                                (name, d["school"], json.dumps(d["marks"])))
+            conn.commit()
+
+    def load_athletes():
         try:
-            os.replace(DATA_FILE, DATA_FILE + ".corrupt")
-        except Exception:
-            pass
+            _db_init()
+            with _db_conn() as conn, conn.cursor() as cur:
+                cur.execute("SELECT name, school, marks FROM athletes")
+                rows = cur.fetchall()
+            out = {}
+            for name, school, marks in rows:
+                try:
+                    m = json.loads(marks) if marks else {}
+                except Exception:
+                    m = {}
+                out[clean_name(name)] = {"school": school or "",
+                                         "marks": {k: str(v) for k, v in m.items()}}
+            return out
+        except Exception as e:
+            print("db load error:", e)
+            return dict(SAMPLE)
+
+    def save_athletes(data):
+        try:
+            with _db_conn() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM athletes")
+                for name, d in data.items():
+                    cur.execute("INSERT INTO athletes (name, school, marks) VALUES (%s,%s,%s)",
+                                (name, d.get("school", ""), json.dumps(d.get("marks", {}))))
+                conn.commit()
+        except Exception as e:
+            print("db save error:", e)
+
+else:
+    def load_athletes():
+        if not os.path.exists(DATA_FILE):
+            with open(DATA_FILE, "w") as f:
+                json.dump(SAMPLE, f, indent=2)
+        try:
+            with open(DATA_FILE) as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("athletes file is not a JSON object")
+            clean = {}
+            for name, d in data.items():
+                if isinstance(d, dict) and isinstance(d.get("marks"), dict):
+                    clean[clean_name(name)] = {"school": d.get("school", ""),
+                                   "marks": {k: str(v) for k, v in d["marks"].items()}}
+            return clean
+        except Exception as e:
+            print("athletes.json unreadable, backing up and reseeding:", e)
+            try:
+                os.replace(DATA_FILE, DATA_FILE + ".corrupt")
+            except Exception:
+                pass
+            with open(DATA_FILE, "w") as f:
+                json.dump(SAMPLE, f, indent=2)
+            return dict(SAMPLE)
+
+    def save_athletes(data):
         with open(DATA_FILE, "w") as f:
-            json.dump(SAMPLE, f, indent=2)
-        return dict(SAMPLE)
-
-
-def save_athletes(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2)
 
 
 def time_to_seconds(mark):
@@ -186,25 +232,32 @@ def tfrrs_fetch_athlete(url):
         if heading and heading.get_text(strip=True):
             name = heading.get_text(strip=True)
         name = clean_name(name)
+
+        # Best-effort: find the school/team name on the page.
+        school = ""
+        team_link = soup.find("a", href=re.compile(r"/teams/"))
+        if team_link and team_link.get_text(strip=True):
+            school = team_link.get_text(strip=True)
+        elif soup.title and soup.title.string and "|" in soup.title.string:
+            school = soup.title.string.split("|", 1)[1].strip()
+        school = re.sub(r"\s+", " ", school).strip()
+
         marks = {}
         for row in soup.find_all("tr"):
             cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
             if not cells:
                 continue
-            # Event label is usually the first cell; fall back to whole row.
             event = match_event(cells[0]) or match_event(" ".join(cells))
-            # Mark is the first cell after the label that looks like a time.
             mark = next((c for c in cells[1:]
                          if re.search(r"\d+:\d|\d+\.\d", c) and time_to_seconds(c)), None)
             if event and mark and event not in marks:
                 m = re.search(r"\d+:\d+(?:\.\d+)?|\d+\.\d+", mark)
                 clean_mark = m.group(0) if m else mark
-                # drop marks that fall outside sane bounds (bad parses)
                 secs = time_to_seconds(clean_mark)
                 lo, hi = EVENT_BOUNDS.get(event, (0, 1e9))
                 if secs and lo <= secs <= hi:
                     marks[event] = clean_mark
-        return {"name": name, "school": "", "marks": marks}
+        return {"name": name, "school": school, "marks": marks}
     except Exception as e:
         print("fetch error:", e)
         traceback.print_exc()
@@ -446,4 +499,5 @@ def compare():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
