@@ -371,8 +371,10 @@ PAGE = """
               <table style="margin-top:.6rem;">{% for ev, mk in d.marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
               <div style="margin-top:.8rem; display:flex; gap:.5rem; flex-wrap:wrap;">
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('compare', a=name) }}">Compare</a>
+                {% if not d.category %}
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Male') }}">Set M</a>
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Female') }}">Set F</a>
+                {% endif %}
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('delete', name=name) }}" onclick="return confirm('Remove {{ name }}?')">Delete</a>
               </div>
             </div>
