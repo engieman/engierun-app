@@ -484,19 +484,41 @@ PAGE = """
         </div>
         {% if c.labels %}
         <script>
-          new Chart(document.getElementById('radar'), {
-            type: 'radar',
-            data: { labels: {{ c.labels | tojson }},
-              datasets: [
-                { label: {{ c.a_name | tojson }}, data: {{ c.a_scores | tojson }}, borderColor:'#c8532a', backgroundColor:'rgba(200,83,42,0.30)', pointBackgroundColor:'#c8532a', borderWidth:2 },
-                { label: {{ c.b_name | tojson }}, data: {{ c.b_scores | tojson }}, borderColor:'#2f6f6b', backgroundColor:'rgba(47,111,107,0.30)', pointBackgroundColor:'#2f6f6b', borderWidth:2 }
-              ] },
-            options: { scales: { r: { min:40, max:100, ticks:{ stepSize:10 },
-              pointLabels:{ font:{ size:14, weight:'700' } },
-              grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
-              plugins: { legend: { position:'top', labels:{ font:{ size:13 } } },
-                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw } } } }
-          });
+          (function(){
+            var labels = {{ c.labels | tojson }};
+            var aData = {{ c.a_scores | tojson }};
+            var bData = {{ c.b_scores | tojson }};
+            var aName = {{ c.a_name | tojson }};
+            var bName = {{ c.b_name | tojson }};
+            var useRadar = labels.length >= 3;  // radar needs 3+ axes to form a shape
+            var ds = [
+              { label:aName, data:aData, borderColor:'#c8532a',
+                backgroundColor: useRadar ? 'rgba(200,83,42,0.30)' : '#c8532a',
+                pointBackgroundColor:'#c8532a', borderWidth:2 },
+              { label:bName, data:bData, borderColor:'#2f6f6b',
+                backgroundColor: useRadar ? 'rgba(47,111,107,0.30)' : '#2f6f6b',
+                pointBackgroundColor:'#2f6f6b', borderWidth:2 }
+            ];
+            var opts;
+            if (useRadar) {
+              opts = { scales: { r: { min:40, max:100, ticks:{ stepSize:10 },
+                pointLabels:{ font:{ size:14, weight:'700' } },
+                grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
+                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
+                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+            } else {
+              opts = { scales: { y: { min:40, max:100, ticks:{ stepSize:10 },
+                grid:{ color:'#cfd3c7' } }, x: { grid:{ display:false },
+                ticks:{ font:{ size:13, weight:'700' } } } },
+                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
+                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+            }
+            new Chart(document.getElementById('radar'), {
+              type: useRadar ? 'radar' : 'bar',
+              data: { labels: labels, datasets: ds },
+              options: opts
+            });
+          })();
         </script>
         {% endif %}
       {% else %}
