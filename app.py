@@ -324,7 +324,8 @@ PAGE = """
       <div class="eyebrow">Collegiate Track &amp; Field</div>
       <h1>EngieRun Compare</h1>
       <nav>
-        <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Athletes</a>
+        <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Home</a>
+        <a href="{{ url_for('athletes_page') }}" class="{{ 'active' if page=='athletes' }}">Athletes</a>
         <a href="{{ url_for('compare') }}" class="{{ 'active' if page=='compare' }}">Compare</a>
         <a href="{{ url_for('add') }}" class="{{ 'active' if page=='add' }}">Add manually</a>
       </nav>
@@ -337,13 +338,21 @@ PAGE = """
           <input type="text" id="tfrrs_url" name="url" placeholder="https://www.tfrrs.org/athletes/...">
           <button class="btn" type="submit">Import</button>
         </form>
-        <p style="font-size:.75rem; color:#5b665e; margin-top:.5rem;">Or use "Add manually" to type in marks yourself. Category is auto-detected on import — fix it below if it's wrong.</p>
+        <p style="font-size:.75rem; color:#5b665e; margin-top:.5rem;">Or use "Add manually" to type in marks yourself.</p>
       </div>
 
       {% if import_failed %}
         <div class="msg">Couldn't read marks from that link. Make sure it's a full athlete URL (contains /athletes/), or use "Add manually".</div>
       {% endif %}
 
+      <div class="card" style="text-align:center; padding:2rem 1.1rem;">
+        <div style="font-size:2.5rem; font-weight:800;">{{ total }}</div>
+        <div class="school" style="margin-bottom:1rem;">athletes in the database</div>
+        <a class="btn" href="{{ url_for('athletes_page') }}">View all athletes &rarr;</a>
+        <a class="btn btn-ghost" href="{{ url_for('compare') }}">Compare two &rarr;</a>
+      </div>
+
+    {% elif page == 'athletes' %}
       <form method="get" style="display:flex; gap:.75rem; margin-bottom:1rem; flex-wrap:wrap;">
         <input type="text" name="q" value="{{ q }}" placeholder="Search by name or school..." style="flex:2; min-width:200px;">
         <input type="hidden" name="cat" value="{{ cat_filter }}">
@@ -356,9 +365,9 @@ PAGE = """
       </form>
 
       <div class="filterbar">
-        <a href="{{ url_for('home', q=q, sort=sort_by) }}" class="{{ 'active' if not cat_filter }}">All</a>
-        <a href="{{ url_for('home', cat='Male', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
-        <a href="{{ url_for('home', cat='Female', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
+        <a href="{{ url_for('athletes_page', q=q, sort=sort_by) }}" class="{{ 'active' if not cat_filter }}">All</a>
+        <a href="{{ url_for('athletes_page', cat='Male', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
+        <a href="{{ url_for('athletes_page', cat='Female', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
       </div>
 
       <p style="margin-bottom:1rem; font-size:.85rem; color:#5b665e;">{{ athletes|length }} athletes shown.</p>
@@ -382,7 +391,7 @@ PAGE = """
           {% endfor %}
         </div>
       {% else %}
-        <p>No athletes yet. Import one above or add manually.</p>
+        <p>No athletes match. <a href="{{ url_for('athletes_page') }}" style="color:var(--lane);">Clear search</a> or add one.</p>
       {% endif %}
 
     {% elif page == 'add' %}
@@ -577,14 +586,21 @@ def apply_view(athletes, q, cat, sort_by):
 @app.route("/")
 def home():
     athletes = load_athletes()
+    return render_template_string(
+        PAGE, page="home", total=len(athletes),
+        import_failed=request.args.get("failed") == "1")
+
+
+@app.route("/athletes")
+def athletes_page():
+    athletes = load_athletes()
     cat_filter = request.args.get("cat", "")
     q = request.args.get("q", "").strip()
     sort_by = request.args.get("sort", "name")
     shown = apply_view(athletes, q, cat_filter, sort_by)
     return render_template_string(
-        PAGE, page="home", athletes=shown, cat_filter=cat_filter,
-        q=q, sort_by=sort_by, events=EVENTS,
-        import_failed=request.args.get("failed") == "1")
+        PAGE, page="athletes", athletes=shown, cat_filter=cat_filter,
+        q=q, sort_by=sort_by, events=EVENTS)
 
 
 @app.route("/import")
@@ -614,7 +630,7 @@ def add():
             athletes = load_athletes()
             athletes[name] = {"school": school, "category": category, "marks": marks}
             save_athletes(athletes)
-            return redirect(url_for("home"))
+            return redirect(url_for("athletes_page"))
     return render_template_string(PAGE, page="add", events=EVENTS, categories=CATEGORIES)
 
 
@@ -624,7 +640,7 @@ def set_category(name, cat):
     if name in athletes and cat in CATEGORIES:
         athletes[name]["category"] = cat
         save_athletes(athletes)
-    return redirect(url_for("home"))
+    return redirect(url_for("athletes_page"))
 
 
 @app.route("/delete/<name>")
@@ -633,7 +649,7 @@ def delete(name):
     if name in athletes:
         del athletes[name]
         save_athletes(athletes)
-    return redirect(url_for("home"))
+    return redirect(url_for("athletes_page"))
 
 
 @app.route("/compare")
