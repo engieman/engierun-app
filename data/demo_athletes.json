@@ -1,0 +1,984 @@
+{
+  "athletes": [
+    {
+      "gender": "Female",
+      "id": "demo-brown-f",
+      "marks": {
+        "1500m": "4:32.34",
+        "3000m": "8:54.70",
+        "Mile": "4:56.49"
+      },
+      "name": "DEMO RUNNER \u2014 BROWN F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:02.00",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 542.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:59.60",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 539.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:57.80",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 537.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:55.90",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 535.9,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:54.70",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 534.7,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Brown",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-brown-m",
+      "marks": {
+        "1500m": "4:20.10",
+        "3000m": "8:30.70",
+        "Mile": "4:43.16"
+      },
+      "name": "DEMO RUNNER \u2014 BROWN M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:38.00",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 518.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:35.60",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 515.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:33.80",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 513.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:31.90",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 511.9,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:30.70",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 510.7,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Brown",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-columbia-f",
+      "marks": {
+        "1500m": "4:33.67",
+        "3000m": "8:57.30",
+        "Mile": "4:57.93"
+      },
+      "name": "DEMO RUNNER \u2014 COLUMBIA F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:04.60",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 544.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:02.20",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 542.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:00.40",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 540.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:58.50",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 538.5,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:57.30",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 537.3,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Columbia",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-columbia-m",
+      "marks": {
+        "1500m": "4:21.43",
+        "3000m": "8:33.30",
+        "Mile": "4:44.61"
+      },
+      "name": "DEMO RUNNER \u2014 COLUMBIA M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:40.60",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 520.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:38.20",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 518.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:36.40",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 516.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:34.50",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 514.5,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:33.30",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 513.3,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Columbia",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-cornell-f",
+      "marks": {
+        "1500m": "4:34.99",
+        "3000m": "8:59.90",
+        "Mile": "4:59.38"
+      },
+      "name": "DEMO RUNNER \u2014 CORNELL F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:07.20",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 547.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:04.80",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 544.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:03.00",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 543.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:01.10",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 541.1,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:59.90",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 539.9,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Cornell",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-cornell-m",
+      "marks": {
+        "1500m": "4:22.75",
+        "3000m": "8:35.90",
+        "Mile": "4:46.05"
+      },
+      "name": "DEMO RUNNER \u2014 CORNELL M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:43.20",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 523.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:40.80",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 520.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:39.00",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 519.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:37.10",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 517.1,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:35.90",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 515.9,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Cornell",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-dartmouth-f",
+      "marks": {
+        "1500m": "4:36.32",
+        "3000m": "9:02.50",
+        "Mile": "5:00.82"
+      },
+      "name": "DEMO RUNNER \u2014 DARTMOUTH F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:09.80",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 549.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:07.40",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 547.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:05.60",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 545.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:03.70",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 543.7,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "9:02.50",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 542.5,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Dartmouth",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-dartmouth-m",
+      "marks": {
+        "1500m": "4:24.08",
+        "3000m": "8:38.50",
+        "Mile": "4:47.49"
+      },
+      "name": "DEMO RUNNER \u2014 DARTMOUTH M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:45.80",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 525.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:43.40",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 523.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:41.60",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 521.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:39.70",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 519.7,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:38.50",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 518.5,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Dartmouth",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-harvard-f",
+      "marks": {
+        "1500m": "4:37.64",
+        "3000m": "9:05.10",
+        "Mile": "5:02.26"
+      },
+      "name": "DEMO RUNNER \u2014 HARVARD F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:12.40",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 552.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:10.00",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 550.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:08.20",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 548.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:06.30",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 546.3,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "9:05.10",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 545.1,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Harvard",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-harvard-m",
+      "marks": {
+        "1500m": "4:25.40",
+        "3000m": "8:41.10",
+        "Mile": "4:48.94"
+      },
+      "name": "DEMO RUNNER \u2014 HARVARD M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:48.40",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 528.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:46.00",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 526.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:44.20",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 524.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:42.30",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 522.3,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:41.10",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 521.1,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Harvard",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-penn-f",
+      "marks": {
+        "1500m": "4:38.97",
+        "3000m": "9:07.70",
+        "Mile": "5:03.71"
+      },
+      "name": "DEMO RUNNER \u2014 PENN F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:15.00",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 555.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:12.60",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 552.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:10.80",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 550.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:08.90",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 548.9,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "9:07.70",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 547.7,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Penn",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-penn-m",
+      "marks": {
+        "1500m": "4:26.73",
+        "3000m": "8:43.70",
+        "Mile": "4:50.38"
+      },
+      "name": "DEMO RUNNER \u2014 PENN M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:51.00",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 531.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:48.60",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 528.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:46.80",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 526.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:44.90",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 524.9,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:43.70",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 523.7,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Penn",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-princeton-f",
+      "marks": {
+        "1500m": "4:40.30",
+        "3000m": "9:10.30",
+        "Mile": "5:05.15"
+      },
+      "name": "DEMO RUNNER \u2014 PRINCETON F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:17.60",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 557.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:15.20",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 555.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:13.40",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 553.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:11.50",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 551.5,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "9:10.30",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 550.3,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Princeton",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-princeton-m",
+      "marks": {
+        "1500m": "4:28.06",
+        "3000m": "8:46.30",
+        "Mile": "4:51.83"
+      },
+      "name": "DEMO RUNNER \u2014 PRINCETON M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:53.60",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 533.6,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:51.20",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 531.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:49.40",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 529.4,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:47.50",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 527.5,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:46.30",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 526.3,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Princeton",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Female",
+      "id": "demo-yale-f",
+      "marks": {
+        "1500m": "4:41.62",
+        "3000m": "9:12.90",
+        "Mile": "5:06.59"
+      },
+      "name": "DEMO RUNNER \u2014 YALE F",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "9:20.20",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 560.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "9:17.80",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 557.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "9:16.00",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 556.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "9:14.10",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 554.1,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "9:12.90",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 552.9,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Yale",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    },
+    {
+      "gender": "Male",
+      "id": "demo-yale-m",
+      "marks": {
+        "1500m": "4:29.38",
+        "3000m": "8:48.90",
+        "Mile": "4:53.27"
+      },
+      "name": "DEMO RUNNER \u2014 YALE M",
+      "profile_url": "",
+      "results": [
+        {
+          "date": "2026-01-18",
+          "event": "3000m",
+          "mark": "8:56.20",
+          "meet": "Synthetic demo meet 1",
+          "seconds": 536.2,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-01",
+          "event": "3000m",
+          "mark": "8:53.80",
+          "meet": "Synthetic demo meet 2",
+          "seconds": 533.8,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-02-15",
+          "event": "3000m",
+          "mark": "8:52.00",
+          "meet": "Synthetic demo meet 3",
+          "seconds": 532.0,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-01",
+          "event": "3000m",
+          "mark": "8:50.10",
+          "meet": "Synthetic demo meet 4",
+          "seconds": 530.1,
+          "source_url": "",
+          "status": "OK"
+        },
+        {
+          "date": "2026-03-15",
+          "event": "3000m",
+          "mark": "8:48.90",
+          "meet": "Synthetic demo meet 5",
+          "seconds": 528.9,
+          "source_url": "",
+          "status": "OK"
+        }
+      ],
+      "school": "Yale",
+      "source": "synthetic-demo",
+      "year": "Demo"
+    }
+  ],
+  "notice": "Synthetic UI fixtures only; not real athlete data. Replace with an authorized compiled export for production use.",
+  "schema_version": 1,
+  "source_type": "synthetic-demo",
+  "synthetic": true
+}

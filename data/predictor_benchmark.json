@@ -1,0 +1,546 @@
+{
+  "schema_version": 1,
+  "title": "Explainable next recorded top-list performance benchmark",
+  "source": {
+    "name": "World Athletics database by Thomas Camminady",
+    "repository": "https://github.com/thomascamminady/world-athletics-database",
+    "commit": "9f0870f1fbf2bfc0792a1cccbb612df73809e4c0",
+    "git_blob_sha": "7da6570597887db30303b14d48750f93c686ffa9",
+    "raw_url": "https://raw.githubusercontent.com/thomascamminady/world-athletics-database/9f0870f1fbf2bfc0792a1cccbb612df73809e4c0/data/data.csv",
+    "license": "MIT",
+    "license_notice": "docs/third-party/world-athletics-database-LICENSE.txt",
+    "csv_sha256": "fc7762060fe7727141f7c5f73edbd4387a4edea5609e4a0e967f7e84cf29d4c2",
+    "raw_rows_committed": false
+  },
+  "caveat": "The source contains ranked/top-list marks, not complete race histories; targets are not necessarily the athlete's genuine next race.",
+  "limitations": [
+    "The 85% hit rate is for a high-confidence cohort with prior CV <= 0.15%, not arbitrary histories.",
+    "The predictor and mean-of-last-four baseline each hit 17/20 final cases; this benchmark does not establish model superiority.",
+    "Target date is known retrospectively and is used for gap and season features.",
+    "Confidence is a heuristic evidence score and uncertainty ranges are not calibrated prediction intervals.",
+    "Pseudonymous IDs plus public event/date/mark fields are linkable public sports data, not anonymous data."
+  ],
+  "protocol": {
+    "accuracy_threshold_percent": 0.85,
+    "minimum_prior_performances": 4,
+    "maximum_cases_per_athlete": 2,
+    "selection": "stable recent history (prior CV <= 0.15%), then seeded SHA-256 sample; no target values",
+    "development_period": "2016-01-01 through 2021-12-31",
+    "final_period": "2022-01-01 onward",
+    "development_cases": 80,
+    "final_cases": 20,
+    "neighbor_count": 12,
+    "neighbor_blend": 0.2
+  },
+  "development_metrics": {
+    "count": 80,
+    "hits": 60,
+    "hit_rate_percent": 75.0,
+    "mae_seconds": 4.4402,
+    "mape_percent": 0.6599
+  },
+  "final_metrics": {
+    "count": 20,
+    "hits": 17,
+    "hit_rate_percent": 85.0,
+    "mae_seconds": 2.035,
+    "mape_percent": 0.5722
+  },
+  "baselines": {
+    "last": {
+      "count": 20,
+      "hits": 16,
+      "hit_rate_percent": 80.0,
+      "mae_seconds": 2.275,
+      "mape_percent": 0.59
+    },
+    "mean_last_four": {
+      "count": 20,
+      "hits": 17,
+      "hit_rate_percent": 85.0,
+      "mae_seconds": 2.0862,
+      "mape_percent": 0.5811
+    },
+    "median_last_four": {
+      "count": 20,
+      "hits": 16,
+      "hit_rate_percent": 80.0,
+      "mae_seconds": 2.115,
+      "mape_percent": 0.5947
+    },
+    "recency_weighted": {
+      "count": 20,
+      "hits": 16,
+      "hit_rate_percent": 80.0,
+      "mae_seconds": 2.1555,
+      "mape_percent": 0.5924
+    }
+  },
+  "leakage_checks": {
+    "all_evidence_strictly_before_cutoff": true,
+    "all_comparable_targets_strictly_before_cutoff": true,
+    "selection_uses_target_performance_values": false
+  },
+  "cases": [
+    {
+      "athlete_id": "wa_b4f3143e5ed010bb",
+      "event": "1500 Metres",
+      "target_date": "2022-05-28",
+      "predicted_seconds": 217.0173,
+      "actual_seconds": 216.4,
+      "absolute_error_seconds": 0.6173,
+      "absolute_percentage_error": 0.2853,
+      "hit": true,
+      "uncertainty_seconds": [
+        214.3382,
+        219.6965
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 217.5,
+        "mean_last_four": 217.2,
+        "median_last_four": 217.25,
+        "recency_weighted": 217.32
+      }
+    },
+    {
+      "athlete_id": "wa_1b0b9a7860ef3931",
+      "event": "800 Metres",
+      "target_date": "2022-06-14",
+      "predicted_seconds": 105.1467,
+      "actual_seconds": 105.7,
+      "absolute_error_seconds": 0.5533,
+      "absolute_percentage_error": 0.5235,
+      "hit": true,
+      "uncertainty_seconds": [
+        104.4908,
+        105.8026
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 105.3,
+        "mean_last_four": 105.225,
+        "median_last_four": 105.2,
+        "recency_weighted": 105.21
+      }
+    },
+    {
+      "athlete_id": "wa_3ab6809117cde466",
+      "event": "1500 Metres",
+      "target_date": "2022-07-02",
+      "predicted_seconds": 216.8732,
+      "actual_seconds": 216.0,
+      "absolute_error_seconds": 0.8732,
+      "absolute_percentage_error": 0.4043,
+      "hit": true,
+      "uncertainty_seconds": [
+        214.8849,
+        218.8616
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 216.6,
+        "mean_last_four": 216.9,
+        "median_last_four": 216.95,
+        "recency_weighted": 216.85
+      }
+    },
+    {
+      "athlete_id": "wa_8fbd8e8e8e5afe51",
+      "event": "5000 Metres",
+      "target_date": "2022-07-16",
+      "predicted_seconds": 806.9906,
+      "actual_seconds": 806.4,
+      "absolute_error_seconds": 0.5906,
+      "absolute_percentage_error": 0.0732,
+      "hit": true,
+      "uncertainty_seconds": [
+        796.3924,
+        817.5888
+      ],
+      "confidence": 0.9469,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 807.8,
+        "mean_last_four": 807.8,
+        "median_last_four": 807.95,
+        "recency_weighted": 807.91
+      }
+    },
+    {
+      "athlete_id": "wa_c9dc4e5ce6d23872",
+      "event": "800 Metres",
+      "target_date": "2022-07-20",
+      "predicted_seconds": 104.8715,
+      "actual_seconds": 105.4,
+      "absolute_error_seconds": 0.5285,
+      "absolute_percentage_error": 0.5014,
+      "hit": true,
+      "uncertainty_seconds": [
+        104.2068,
+        105.5362
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 105.0,
+        "mean_last_four": 104.875,
+        "median_last_four": 104.85,
+        "recency_weighted": 104.9
+      }
+    },
+    {
+      "athlete_id": "wa_a4eb7301ce025696",
+      "event": "5000 Metres",
+      "target_date": "2022-07-21",
+      "predicted_seconds": 801.0528,
+      "actual_seconds": 804.5,
+      "absolute_error_seconds": 3.4472,
+      "absolute_percentage_error": 0.4285,
+      "hit": true,
+      "uncertainty_seconds": [
+        790.546,
+        811.5596
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 801.8,
+        "mean_last_four": 802.125,
+        "median_last_four": 802.05,
+        "recency_weighted": 801.94
+      }
+    },
+    {
+      "athlete_id": "wa_55a8a7709c1a57a7",
+      "event": "800 Metres",
+      "target_date": "2022-07-22",
+      "predicted_seconds": 121.1681,
+      "actual_seconds": 121.3,
+      "absolute_error_seconds": 0.1319,
+      "absolute_percentage_error": 0.1087,
+      "hit": true,
+      "uncertainty_seconds": [
+        120.1783,
+        122.1578
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.2,
+        "mean_last_four": 121.3,
+        "median_last_four": 121.2,
+        "recency_weighted": 121.24
+      }
+    },
+    {
+      "athlete_id": "wa_8c9b14003789e10d",
+      "event": "800 Metres",
+      "target_date": "2022-08-08",
+      "predicted_seconds": 121.4155,
+      "actual_seconds": 121.5,
+      "absolute_error_seconds": 0.0845,
+      "absolute_percentage_error": 0.0695,
+      "hit": true,
+      "uncertainty_seconds": [
+        120.5268,
+        122.3041
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.6,
+        "mean_last_four": 121.325,
+        "median_last_four": 121.3,
+        "recency_weighted": 121.4
+      }
+    },
+    {
+      "athlete_id": "wa_c62bf4760bc07650",
+      "event": "800 Metres",
+      "target_date": "2022-08-24",
+      "predicted_seconds": 121.5837,
+      "actual_seconds": 119.7,
+      "absolute_error_seconds": 1.8837,
+      "absolute_percentage_error": 1.5737,
+      "hit": false,
+      "uncertainty_seconds": [
+        120.4998,
+        122.6676
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.5,
+        "mean_last_four": 121.7,
+        "median_last_four": 121.7,
+        "recency_weighted": 121.66
+      }
+    },
+    {
+      "athlete_id": "wa_488ba73ab8b8315a",
+      "event": "800 Metres",
+      "target_date": "2022-08-26",
+      "predicted_seconds": 121.6034,
+      "actual_seconds": 120.8,
+      "absolute_error_seconds": 0.8034,
+      "absolute_percentage_error": 0.6651,
+      "hit": true,
+      "uncertainty_seconds": [
+        120.8851,
+        122.3216
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.6,
+        "mean_last_four": 121.6,
+        "median_last_four": 121.65,
+        "recency_weighted": 121.63
+      }
+    },
+    {
+      "athlete_id": "wa_8c9b14003789e10d",
+      "event": "800 Metres",
+      "target_date": "2022-09-02",
+      "predicted_seconds": 121.3985,
+      "actual_seconds": 121.2,
+      "absolute_error_seconds": 0.1985,
+      "absolute_percentage_error": 0.1638,
+      "hit": true,
+      "uncertainty_seconds": [
+        120.0642,
+        122.7328
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.5,
+        "mean_last_four": 121.425,
+        "median_last_four": 121.4,
+        "recency_weighted": 121.47
+      }
+    },
+    {
+      "athlete_id": "wa_3b3332d400ce792b",
+      "event": "5 Kilometres",
+      "target_date": "2023-04-15",
+      "predicted_seconds": 836.1304,
+      "actual_seconds": 840.0,
+      "absolute_error_seconds": 3.8696,
+      "absolute_percentage_error": 0.4607,
+      "hit": true,
+      "uncertainty_seconds": [
+        823.4988,
+        848.762
+      ],
+      "confidence": 0.9352,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 836.0,
+        "mean_last_four": 836.5,
+        "median_last_four": 836.5,
+        "recency_weighted": 836.5
+      }
+    },
+    {
+      "athlete_id": "wa_dc6f00ca0664649a",
+      "event": "3000 Metres Steeplechase",
+      "target_date": "2023-05-06",
+      "predicted_seconds": 585.9261,
+      "actual_seconds": 590.8,
+      "absolute_error_seconds": 4.8739,
+      "absolute_percentage_error": 0.825,
+      "hit": true,
+      "uncertainty_seconds": [
+        577.8482,
+        594.004
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 586.2,
+        "mean_last_four": 586.525,
+        "median_last_four": 586.55,
+        "recency_weighted": 586.41
+      }
+    },
+    {
+      "athlete_id": "wa_cb463ceddf6e6040",
+      "event": "10000 Metres",
+      "target_date": "2023-05-20",
+      "predicted_seconds": 1684.2221,
+      "actual_seconds": 1671.2,
+      "absolute_error_seconds": 13.0221,
+      "absolute_percentage_error": 0.7792,
+      "hit": true,
+      "uncertainty_seconds": [
+        1654.3636,
+        1714.0806
+      ],
+      "confidence": 0.9493,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 1688.4,
+        "mean_last_four": 1685.1,
+        "median_last_four": 1685.1,
+        "recency_weighted": 1685.92
+      }
+    },
+    {
+      "athlete_id": "wa_3f2581ee9bde3f1f",
+      "event": "3000 Metres Steeplechase",
+      "target_date": "2023-05-26",
+      "predicted_seconds": 503.5135,
+      "actual_seconds": 502.8,
+      "absolute_error_seconds": 0.7135,
+      "absolute_percentage_error": 0.1419,
+      "hit": true,
+      "uncertainty_seconds": [
+        497.4774,
+        509.5496
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 504.6,
+        "mean_last_four": 504.625,
+        "median_last_four": 504.6,
+        "recency_weighted": 504.69
+      }
+    },
+    {
+      "athlete_id": "wa_c2673758ceff8cd0",
+      "event": "800 Metres",
+      "target_date": "2023-05-28",
+      "predicted_seconds": 119.7708,
+      "actual_seconds": 121.3,
+      "absolute_error_seconds": 1.5292,
+      "absolute_percentage_error": 1.2607,
+      "hit": false,
+      "uncertainty_seconds": [
+        119.172,
+        120.3697
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 119.6,
+        "mean_last_four": 119.775,
+        "median_last_four": 119.75,
+        "recency_weighted": 119.71
+      }
+    },
+    {
+      "athlete_id": "wa_c879b85a8d451d89",
+      "event": "3000 Metres Steeplechase",
+      "target_date": "2023-06-06",
+      "predicted_seconds": 508.8429,
+      "actual_seconds": 504.7,
+      "absolute_error_seconds": 4.1429,
+      "absolute_percentage_error": 0.8209,
+      "hit": true,
+      "uncertainty_seconds": [
+        501.4431,
+        516.2427
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 508.3,
+        "mean_last_four": 508.925,
+        "median_last_four": 509.0,
+        "recency_weighted": 508.83
+      }
+    },
+    {
+      "athlete_id": "wa_cf5d2301c867660f",
+      "event": "800 Metres",
+      "target_date": "2023-06-16",
+      "predicted_seconds": 120.8721,
+      "actual_seconds": 121.7,
+      "absolute_error_seconds": 0.8279,
+      "absolute_percentage_error": 0.6803,
+      "hit": true,
+      "uncertainty_seconds": [
+        119.7768,
+        121.9674
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 120.9,
+        "mean_last_four": 120.875,
+        "median_last_four": 120.9,
+        "recency_weighted": 120.87
+      }
+    },
+    {
+      "athlete_id": "wa_b71519432d8ef3e3",
+      "event": "800 Metres",
+      "target_date": "2023-06-21",
+      "predicted_seconds": 121.6732,
+      "actual_seconds": 119.7,
+      "absolute_error_seconds": 1.9732,
+      "absolute_percentage_error": 1.6485,
+      "hit": false,
+      "uncertainty_seconds": [
+        120.6958,
+        122.6507
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 121.6,
+        "mean_last_four": 121.675,
+        "median_last_four": 121.7,
+        "recency_weighted": 121.66
+      }
+    },
+    {
+      "athlete_id": "wa_b4cfbd753a660947",
+      "event": "800 Metres",
+      "target_date": "2023-06-30",
+      "predicted_seconds": 119.7359,
+      "actual_seconds": 119.7,
+      "absolute_error_seconds": 0.0359,
+      "absolute_percentage_error": 0.03,
+      "hit": true,
+      "uncertainty_seconds": [
+        119.1372,
+        120.3346
+      ],
+      "confidence": 0.95,
+      "confidence_kind": "heuristic_neighbor_evidence_score",
+      "uncertainty_kind": "uncalibrated_neighbor_residual_range",
+      "baseline_predictions": {
+        "last": 119.9,
+        "mean_last_four": 119.7,
+        "median_last_four": 119.7,
+        "recency_weighted": 119.75
+      }
+    }
+  ]
+}
