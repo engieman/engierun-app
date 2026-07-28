@@ -226,6 +226,59 @@ def label_strength_weakness(labels, scores):
     return max(pairs, key=lambda p: p[1])[0], min(pairs, key=lambda p: p[1])[0]
 
 
+def multi_compare(selected, floor=40):
+    """selected: list of (name, marks). Returns (labels, {name: [scores]}).
+    Each axis is anchored to the fastest athlete on it. Uses runner-type
+    groups when 3+ are shared by everyone, else per-event axes."""
+    def build(keys, getter):
+        labs = []
+        data = {n: [] for n, _ in selected}
+        for key in keys:
+            vals = {n: getter(m, key) for n, m in selected}
+            if all(v is not None for v in vals.values()) and vals:
+                best = min(vals.values())
+                labs.append(key)
+                for n in data:
+                    data[n].append(round(floor + (best / vals[n]) ** 8 * (100 - floor), 1))
+        return labs, data
+
+    labels, data = build(list(AXES.keys()), lambda m, k: axis_seconds(m, AXES[k]))
+    if len(labels) < 3:
+        ev_labels, ev_data = build(EVENTS, lambda m, k: time_to_seconds(m.get(k)))
+        if len(ev_labels) >= len(labels):
+            labels, data = ev_labels, ev_data
+    return labels, data
+
+
+def head_to_head(a_marks, b_marks, a_name, b_name):
+    """Per-event winner table for exactly two athletes."""
+    rows = []
+    for ev in EVENTS:
+        a, b = time_to_seconds(a_marks.get(ev)), time_to_seconds(b_marks.get(ev))
+        if a and b:
+            if a < b:
+                winner, diff = a_name, b - a
+            elif b < a:
+                winner, diff = b_name, a - b
+            else:
+                winner, diff = "Tie", 0
+            rows.append({"event": ev, "a_mark": a_marks.get(ev), "b_mark": b_marks.get(ev),
+                         "winner": winner, "diff": round(diff, 2)})
+    return rows
+
+
+def fastest_per_event(selected):
+    """For 3+ athletes: who is fastest in each event."""
+    rows = []
+    for ev in EVENTS:
+        vals = [(n, time_to_seconds(m.get(ev)), m.get(ev)) for n, m in selected
+                if time_to_seconds(m.get(ev))]
+        if len(vals) >= 2:
+            vals.sort(key=lambda x: x[1])
+            rows.append({"event": ev, "winner": vals[0][0], "mark": vals[0][2]})
+    return rows
+
+
 def tfrrs_fetch_athlete(url):
     try:
         time.sleep(1)
@@ -421,109 +474,151 @@ PAGE = """
         <a href="{{ url_for('compare', cat='Male') }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
         <a href="{{ url_for('compare', cat='Female') }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
       </div>
-      <form method="get" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:2rem;">
+      <form method="get" id="cmpform" style="margin-bottom:2rem;">
         <input type="hidden" name="cat" value="{{ cat_filter }}">
-        <div class="field" style="margin-bottom:0; flex:1; min-width:180px;">
-          <label>Athlete A</label>
-          <div class="searchable" data-target="a">
-            <input type="text" class="search-in" autocomplete="off" placeholder="Type to search..." value="{{ a_name or '' }}">
-            <input type="hidden" name="a" class="hidden-val" value="{{ a_name or '' }}">
-            <div class="options">
-              {% for n in names %}<div class="opt" data-val="{{ n }}">{{ n }}</div>{% endfor %}
-            </div>
-          </div>
+        <div id="picker-rows"></div>
+        <div style="display:flex; gap:.75rem; margin-top:1rem; flex-wrap:wrap;">
+          <button type="button" class="btn btn-ghost" id="add-athlete">+ Add athlete</button>
+          <button class="btn" type="submit">Compare</button>
         </div>
-        <div class="field" style="margin-bottom:0; flex:1; min-width:180px;">
-          <label>Athlete B</label>
-          <div class="searchable" data-target="b">
-            <input type="text" class="search-in" autocomplete="off" placeholder="Type to search..." value="{{ b_name or '' }}">
-            <input type="hidden" name="b" class="hidden-val" value="{{ b_name or '' }}">
-            <div class="options">
-              {% for n in names %}<div class="opt" data-val="{{ n }}">{{ n }}</div>{% endfor %}
-            </div>
-          </div>
-        </div>
-        <button class="btn" type="submit">Compare</button>
       </form>
       <script>
-        document.querySelectorAll('.searchable').forEach(function(box){
+        var ALL_NAMES = {{ names | tojson }};
+        var PRESELECTED = {{ (selected_names or []) | tojson }};
+
+        function makeRow(preval){
+          var wrap = document.createElement('div');
+          wrap.className = 'picker-row';
+          wrap.style.cssText = 'display:flex; gap:.5rem; align-items:center; margin-bottom:.6rem;';
+
+          var box = document.createElement('div');
+          box.className = 'searchable';
+          box.style.cssText = 'flex:1; min-width:200px;';
+          var inp = document.createElement('input');
+          inp.type='text'; inp.className='search-in'; inp.autocomplete='off';
+          inp.placeholder='Type to search...'; inp.value = preval || '';
+          var hid = document.createElement('input');
+          hid.type='hidden'; hid.name='athlete'; hid.className='hidden-val'; hid.value = preval || '';
+          var opts = document.createElement('div'); opts.className='options';
+          ALL_NAMES.forEach(function(n){
+            var o=document.createElement('div'); o.className='opt'; o.setAttribute('data-val',n); o.textContent=n;
+            opts.appendChild(o);
+          });
+          box.appendChild(inp); box.appendChild(hid); box.appendChild(opts);
+
+          var rm = document.createElement('button');
+          rm.type='button'; rm.className='btn btn-ghost'; rm.textContent='×';
+          rm.style.cssText='padding:.4rem .7rem; font-size:1rem;';
+          rm.addEventListener('click', function(){
+            if(document.querySelectorAll('.picker-row').length > 2) wrap.remove();
+          });
+
+          wrap.appendChild(box); wrap.appendChild(rm);
+          wireSearchable(box);
+          return wrap;
+        }
+
+        function wireSearchable(box){
           var input = box.querySelector('.search-in');
           var hidden = box.querySelector('.hidden-val');
           var opts = box.querySelectorAll('.opt');
           input.addEventListener('focus', function(){ box.classList.add('open'); });
           input.addEventListener('input', function(){
             var qq = input.value.toLowerCase();
-            box.classList.add('open');
-            hidden.value = input.value;
-            opts.forEach(function(o){
-              o.classList.toggle('hidden', o.textContent.toLowerCase().indexOf(qq) === -1);
-            });
+            box.classList.add('open'); hidden.value = input.value;
+            opts.forEach(function(o){ o.classList.toggle('hidden', o.textContent.toLowerCase().indexOf(qq)===-1); });
           });
           opts.forEach(function(o){
             o.addEventListener('click', function(){
-              input.value = o.textContent;
-              hidden.value = o.getAttribute('data-val');
-              box.classList.remove('open');
+              input.value=o.textContent; hidden.value=o.getAttribute('data-val'); box.classList.remove('open');
             });
           });
-          document.addEventListener('click', function(e){
-            if(!box.contains(e.target)) box.classList.remove('open');
-          });
+          document.addEventListener('click', function(e){ if(!box.contains(e.target)) box.classList.remove('open'); });
+        }
+
+        var rows = document.getElementById('picker-rows');
+        var start = PRESELECTED.length >= 2 ? PRESELECTED : [PRESELECTED[0]||'', PRESELECTED[1]||''];
+        start.forEach(function(v){ rows.appendChild(makeRow(v)); });
+        document.getElementById('add-athlete').addEventListener('click', function(){
+          rows.appendChild(makeRow(''));
         });
       </script>
 
       {% if c %}
         {% if c.labels %}
-          <div class="card" style="margin-bottom:2rem;"><canvas id="radar" height="380"></canvas></div>
+          <div class="card" style="margin-bottom:1.5rem;"><canvas id="radar" height="380"></canvas></div>
         {% else %}
-          <div class="msg">These two athletes share no overlapping events, so there's nothing to chart.</div>
+          <div class="msg">These athletes share fewer than the events needed to chart. Try athletes with more overlapping events.</div>
         {% endif %}
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-          <div class="card">
-            <h2 style="font-size:1.25rem;"><span class="dot" style="background:var(--lane)"></span>{{ c.a_name }}</h2>
-            <div class="school" style="margin-bottom:.4rem;">{{ c.a_school }}</div>
-            {% if c.a_cat %}<span class="tag cat">{{ c.a_cat }}</span>{% endif %}
-            {% if c.a_strength %}<span class="tag strong">Strength: {{ c.a_strength }}</span><span class="tag weak">Weakness: {{ c.a_weakness }}</span>{% endif %}
-            <table style="margin-top:.6rem;">{% for ev, mk in c.a_marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
+
+        {% if c.summary %}
+          <div class="card" style="margin-bottom:1.5rem;">
+            <h2 style="font-size:1rem; margin-bottom:.6rem;">
+              {% if c.summary_kind == 'h2h' %}Who wins each event{% else %}Fastest in each event{% endif %}
+            </h2>
+            <table>
+              {% if c.summary_kind == 'h2h' %}
+                <tr style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#5b665e;">
+                  <td>Event</td><td>{{ c.series[0].name }}</td><td>{{ c.series[1].name }}</td><td style="text-align:right;">Winner (gap)</td>
+                </tr>
+                {% for r in c.summary %}
+                  <tr>
+                    <td style="font-weight:700;">{{ r.event }}</td>
+                    <td>{{ r.a_mark }}</td>
+                    <td>{{ r.b_mark }}</td>
+                    <td style="text-align:right;">{% if r.winner=='Tie' %}Tie{% else %}<b>{{ r.winner }}</b> by {{ r.diff }}s{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#5b665e;">
+                  <td>Event</td><td>Fastest</td><td style="text-align:right;">Mark</td>
+                </tr>
+                {% for r in c.summary %}
+                  <tr><td style="font-weight:700;">{{ r.event }}</td><td><b>{{ r.winner }}</b></td><td style="text-align:right;">{{ r.mark }}</td></tr>
+                {% endfor %}
+              {% endif %}
+            </table>
           </div>
-          <div class="card">
-            <h2 style="font-size:1.25rem;"><span class="dot" style="background:var(--lane-b)"></span>{{ c.b_name }}</h2>
-            <div class="school" style="margin-bottom:.4rem;">{{ c.b_school }}</div>
-            {% if c.b_cat %}<span class="tag cat">{{ c.b_cat }}</span>{% endif %}
-            {% if c.b_strength %}<span class="tag strong">Strength: {{ c.b_strength }}</span><span class="tag weak">Weakness: {{ c.b_weakness }}</span>{% endif %}
-            <table style="margin-top:.6rem;">{% for ev, mk in c.b_marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
-          </div>
+        {% endif %}
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem;">
+          {% for s in c.series %}
+            <div class="card">
+              <h2 style="font-size:1.2rem;"><span class="dot" style="background:{{ s.color }}"></span>{{ s.name }}</h2>
+              <div class="school" style="margin-bottom:.4rem;">{{ s.school }}</div>
+              {% if s.category %}<span class="tag cat">{{ s.category }}</span>{% endif %}
+              <table style="margin-top:.6rem;">{% for ev, mk in s.marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
+            </div>
+          {% endfor %}
         </div>
+
         {% if c.labels %}
         <script>
           (function(){
             var labels = {{ c.labels | tojson }};
-            var aData = {{ c.a_scores | tojson }};
-            var bData = {{ c.b_scores | tojson }};
-            var aName = {{ c.a_name | tojson }};
-            var bName = {{ c.b_name | tojson }};
-            var useRadar = labels.length >= 3;  // radar needs 3+ axes to form a shape
-            var ds = [
-              { label:aName, data:aData, borderColor:'#c8532a',
-                backgroundColor: useRadar ? 'rgba(200,83,42,0.30)' : '#c8532a',
-                pointBackgroundColor:'#c8532a', borderWidth:2 },
-              { label:bName, data:bData, borderColor:'#2f6f6b',
-                backgroundColor: useRadar ? 'rgba(47,111,107,0.30)' : '#2f6f6b',
-                pointBackgroundColor:'#2f6f6b', borderWidth:2 }
-            ];
+            var series = {{ c.series | tojson }};
+            var useRadar = labels.length >= 3;
+            function hexToRgba(h, a){
+              var n = parseInt(h.slice(1),16);
+              return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+            }
+            var ds = series.map(function(s){
+              return { label:s.name, data:s.scores, borderColor:s.color,
+                backgroundColor: useRadar ? hexToRgba(s.color,0.20) : s.color,
+                pointBackgroundColor:s.color, borderWidth:2 };
+            });
             var opts;
             if (useRadar) {
-              opts = { scales: { r: { min:40, max:100, ticks:{ stepSize:10 },
+              opts = { scales:{ r:{ min:40, max:100, ticks:{ stepSize:10 },
                 pointLabels:{ font:{ size:14, weight:'700' } },
                 grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
-                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+                plugins:{ legend:{ position:'top', labels:{ font:{ size:13 } } },
+                  tooltip:{ callbacks:{ label:function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
             } else {
-              opts = { scales: { y: { min:40, max:100, ticks:{ stepSize:10 },
-                grid:{ color:'#cfd3c7' } }, x: { grid:{ display:false },
-                ticks:{ font:{ size:13, weight:'700' } } } },
-                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+              opts = { scales:{ y:{ min:40, max:100, ticks:{ stepSize:10 }, grid:{ color:'#cfd3c7' } },
+                x:{ grid:{ display:false }, ticks:{ font:{ size:13, weight:'700' } } } },
+                plugins:{ legend:{ position:'top', labels:{ font:{ size:13 } } },
+                  tooltip:{ callbacks:{ label:function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
             }
             new Chart(document.getElementById('radar'), {
               type: useRadar ? 'radar' : 'bar',
@@ -534,7 +629,7 @@ PAGE = """
         </script>
         {% endif %}
       {% else %}
-        <p>Select two athletes above to see their runner-type profiles compared.</p>
+        <p>Pick two or more athletes above, then click Compare. Use "+ Add athlete" to compare a whole group.</p>
       {% endif %}
     {% endif %}
   </div>
@@ -659,35 +754,46 @@ def compare():
     shown = filter_by_category(athletes, cat_filter)
     names = sorted(shown.keys(),
                    key=lambda n: (n.strip().split()[-1].lower() if n.strip() else n.lower(), n.lower()))
-    a_name = request.args.get("a")
-    b_name = request.args.get("b")
+
+    # Collect any number of selected athletes from repeated ?athlete= params.
+    selected_names = [n for n in request.args.getlist("athlete") if n in athletes]
+    # Back-compat: also accept old ?a= / ?b= links.
+    for k in ("a", "b"):
+        v = request.args.get(k)
+        if v and v in athletes and v not in selected_names:
+            selected_names.append(v)
+
     comparison = None
-    if a_name in athletes and b_name in athletes:
+    if len(selected_names) >= 2:
         try:
-            a, b = athletes[a_name], athletes[b_name]
-            labels, a_scores, b_scores = compare_axes(a["marks"], b["marks"])
-            a_str, a_weak = label_strength_weakness(labels, a_scores)
-            b_str, b_weak = label_strength_weakness(labels, b_scores)
-            comparison = {
-                "a_name": a_name, "b_name": b_name,
-                "a_school": a["school"], "b_school": b["school"],
-                "a_cat": a.get("category", ""), "b_cat": b.get("category", ""),
-                "labels": labels, "a_scores": a_scores, "b_scores": b_scores,
-                "a_strength": a_str, "a_weakness": a_weak,
-                "b_strength": b_str, "b_weakness": b_weak,
-                "a_marks": a["marks"], "b_marks": b["marks"],
-            }
+            selected = [(n, athletes[n]["marks"]) for n in selected_names]
+            labels, data = multi_compare(selected)
+            # colors cycle for each athlete
+            palette = ["#c8532a", "#2f6f6b", "#c99a2e", "#4b6cb7", "#8a3b8f", "#3f8c4f"]
+            series = []
+            for i, n in enumerate(selected_names):
+                col = palette[i % len(palette)]
+                series.append({"name": n, "color": col, "scores": data.get(n, []),
+                               "school": athletes[n].get("school", ""),
+                               "category": athletes[n].get("category", ""),
+                               "marks": athletes[n]["marks"]})
+            # summaries
+            if len(selected_names) == 2:
+                summary = head_to_head(athletes[selected_names[0]]["marks"],
+                                       athletes[selected_names[1]]["marks"],
+                                       selected_names[0], selected_names[1])
+                summary_kind = "h2h"
+            else:
+                summary = fastest_per_event(selected)
+                summary_kind = "fastest"
+            comparison = {"labels": labels, "series": series,
+                          "summary": summary, "summary_kind": summary_kind}
         except Exception as e:
             print("compare error:", e)
-            comparison = {"a_name": a_name, "b_name": b_name,
-                          "a_school": "", "b_school": "", "a_cat": "", "b_cat": "",
-                          "labels": [], "a_scores": [], "b_scores": [],
-                          "a_strength": None, "a_weakness": None,
-                          "b_strength": None, "b_weakness": None,
-                          "a_marks": athletes[a_name].get("marks", {}),
-                          "b_marks": athletes[b_name].get("marks", {})}
+            comparison = None
+
     return render_template_string(PAGE, page="compare", names=names,
-                                  a_name=a_name, b_name=b_name, c=comparison,
+                                  selected_names=selected_names, c=comparison,
                                   cat_filter=cat_filter)
 
 
