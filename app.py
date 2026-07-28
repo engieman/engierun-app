@@ -459,6 +459,7 @@ PAGE = """
         <a href="{{ url_for('athletes_page', q=q, sort=sort_by) }}" class="{{ 'active' if not cat_filter }}">All</a>
         <a href="{{ url_for('athletes_page', cat='Male', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
         <a href="{{ url_for('athletes_page', cat='Female', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
+        <a href="{{ url_for('athletes_page', cat='Unassigned', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Unassigned' }}">Unassigned</a>
       </div>
 
       <p style="margin-bottom:1rem; font-size:.85rem; color:#5b665e;">{{ athletes|length }} athletes shown.</p>
@@ -570,7 +571,16 @@ PAGE = """
           rm.type='button'; rm.className='btn btn-ghost'; rm.textContent='×';
           rm.style.cssText='padding:.4rem .7rem; font-size:1rem;';
           rm.addEventListener('click', function(){
-            if(document.querySelectorAll('.picker-row').length > 2) wrap.remove();
+            if(document.querySelectorAll('.picker-row').length > 2){
+              wrap.remove();
+            } else {
+              // At the two-row minimum: clear this picker instead of removing it.
+              var inp = box.querySelector('.search-in');
+              var hid = box.querySelector('.hidden-val');
+              inp.value = ''; hid.value = '';
+              box.querySelectorAll('.opt').forEach(function(o){ o.classList.remove('hidden'); });
+              inp.focus();
+            }
           });
 
           wrap.appendChild(box); wrap.appendChild(rm);
@@ -757,6 +767,8 @@ PAGE = """
 def filter_by_category(athletes, cat):
     if not cat:
         return athletes
+    if cat == "Unassigned":
+        return {n: d for n, d in athletes.items() if not d.get("category", "")}
     return {n: d for n, d in athletes.items() if d.get("category", "") == cat}
 
 
