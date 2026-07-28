@@ -243,15 +243,19 @@ def multi_compare(selected, floor=40):
                     data[n].append(round(floor + (best / vals[n]) ** 8 * (100 - floor), 1))
         return labs, data
 
-    # Per-event first: an axis per event that ALL selected athletes share.
+    # Per-event: an axis per event that ALL selected athletes actually share.
+    # This is the honest comparison — same event for everyone.
     ev_labels, ev_data = build(EVENTS, lambda m, k: time_to_seconds(m.get(k)))
-    # Runner-type groups as an alternative.
-    grp_labels, grp_data = build(list(AXES.keys()), lambda m, k: axis_seconds(m, AXES[k]))
 
-    # Use whichever gives more axes (ties favor per-event, which is more legible).
-    if len(ev_labels) >= len(grp_labels):
-        return ev_labels, ev_data
-    return grp_labels, grp_data
+    # Runner-type group axes average across events and can compare different
+    # underlying events between runners, so only use them as a RICHER view when
+    # the athletes already share enough real events (3+) to make a radar anyway.
+    # When they share few events, always use the real per-event comparison.
+    if len(ev_labels) >= 3:
+        grp_labels, grp_data = build(list(AXES.keys()), lambda m, k: axis_seconds(m, AXES[k]))
+        if len(grp_labels) > len(ev_labels):
+            return grp_labels, grp_data
+    return ev_labels, ev_data
 
 
 def head_to_head(a_marks, b_marks, a_name, b_name):
