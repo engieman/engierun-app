@@ -228,8 +228,9 @@ def label_strength_weakness(labels, scores):
 
 def multi_compare(selected, floor=40):
     """selected: list of (name, marks). Returns (labels, {name: [scores]}).
-    Each axis is anchored to the fastest athlete on it. Uses runner-type
-    groups when 3+ are shared by everyone, else per-event axes."""
+    Each axis is anchored to the fastest athlete on it. Prefers per-event axes
+    (shared events) since that reaches 3+ axes most often; falls back to
+    runner-type groups only if per-event gives fewer axes."""
     def build(keys, getter):
         labs = []
         data = {n: [] for n, _ in selected}
@@ -242,12 +243,15 @@ def multi_compare(selected, floor=40):
                     data[n].append(round(floor + (best / vals[n]) ** 8 * (100 - floor), 1))
         return labs, data
 
-    labels, data = build(list(AXES.keys()), lambda m, k: axis_seconds(m, AXES[k]))
-    if len(labels) < 3:
-        ev_labels, ev_data = build(EVENTS, lambda m, k: time_to_seconds(m.get(k)))
-        if len(ev_labels) >= len(labels):
-            labels, data = ev_labels, ev_data
-    return labels, data
+    # Per-event first: an axis per event that ALL selected athletes share.
+    ev_labels, ev_data = build(EVENTS, lambda m, k: time_to_seconds(m.get(k)))
+    # Runner-type groups as an alternative.
+    grp_labels, grp_data = build(list(AXES.keys()), lambda m, k: axis_seconds(m, AXES[k]))
+
+    # Use whichever gives more axes (ties favor per-event, which is more legible).
+    if len(ev_labels) >= len(grp_labels):
+        return ev_labels, ev_data
+    return grp_labels, grp_data
 
 
 def head_to_head(a_marks, b_marks, a_name, b_name):
@@ -276,6 +280,16 @@ def fastest_per_event(selected):
         if len(vals) >= 2:
             vals.sort(key=lambda x: x[1])
             rows.append({"event": ev, "winner": vals[0][0], "mark": vals[0][2]})
+    return rows
+
+
+def build_grid(selected):
+    """Full events x athletes grid: a row for every event ANY selected runner
+    has, a cell per athlete (blank where they don't have that event)."""
+    used = [ev for ev in EVENTS if any(ev in m for _, m in selected)]
+    rows = []
+    for ev in used:
+        rows.append({"event": ev, "marks": [m.get(ev, "") for _, m in selected]})
     return rows
 
 
@@ -545,10 +559,15 @@ PAGE = """
       </script>
 
       {% if c %}
-        {% if c.labels %}
+        {% if c.labels and c.labels|length >= 3 %}
           <div class="card" style="margin-bottom:1.5rem;"><canvas id="radar" height="380"></canvas></div>
+        {% elif c.labels %}
+          <div class="card" style="margin-bottom:1.5rem;">
+            <p style="font-size:.8rem; color:#5b665e; margin-bottom:1rem;">These athletes share only {{ c.labels|length }} event(s) — not enough for a radar, so here's an event-by-event view.</p>
+            <div id="gauges" style="display:flex; gap:2rem; flex-wrap:wrap; justify-content:center;"></div>
+          </div>
         {% else %}
-          <div class="msg">These athletes share fewer than the events needed to chart. Try athletes with more overlapping events.</div>
+          <div class="msg">These athletes don't share any events, so there's nothing to chart. Their marks are listed below.</div>
         {% endif %}
 
         {% if c.summary %}
@@ -581,6 +600,24 @@ PAGE = """
           </div>
         {% endif %}
 
+        {% if c.grid %}
+          <div class="card" style="margin-bottom:1.5rem; overflow-x:auto;">
+            <h2 style="font-size:1rem; margin-bottom:.6rem;">All events side by side</h2>
+            <table>
+              <tr style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#5b665e;">
+                <td>Event</td>
+                {% for s in c.series %}<td style="color:{{ s.color }}; font-weight:700;">{{ s.name }}</td>{% endfor %}
+              </tr>
+              {% for row in c.grid %}
+                <tr>
+                  <td style="font-weight:700;">{{ row.event }}</td>
+                  {% for mk in row.marks %}<td>{{ mk if mk else '—' }}</td>{% endfor %}
+                </tr>
+              {% endfor %}
+            </table>
+          </div>
+        {% endif %}
+
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem;">
           {% for s in c.series %}
             <div class="card">
@@ -597,34 +634,67 @@ PAGE = """
           (function(){
             var labels = {{ c.labels | tojson }};
             var series = {{ c.series | tojson }};
-            var useRadar = labels.length >= 3;
             function hexToRgba(h, a){
               var n = parseInt(h.slice(1),16);
               return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
             }
-            var ds = series.map(function(s){
-              return { label:s.name, data:s.scores, borderColor:s.color,
-                backgroundColor: useRadar ? hexToRgba(s.color,0.20) : s.color,
-                pointBackgroundColor:s.color, borderWidth:2 };
-            });
-            var opts;
-            if (useRadar) {
-              opts = { scales:{ r:{ min:40, max:100, ticks:{ stepSize:10 },
-                pointLabels:{ font:{ size:14, weight:'700' } },
-                grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
-                plugins:{ legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label:function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+
+            if (labels.length >= 3) {
+              // RADAR
+              var ds = series.map(function(s){
+                return { label:s.name, data:s.scores, borderColor:s.color,
+                  backgroundColor: hexToRgba(s.color,0.20),
+                  pointBackgroundColor:s.color, borderWidth:2 };
+              });
+              new Chart(document.getElementById('radar'), {
+                type: 'radar',
+                data: { labels: labels, datasets: ds },
+                options: { scales:{ r:{ min:40, max:100, ticks:{ stepSize:10 },
+                  pointLabels:{ font:{ size:14, weight:'700' } },
+                  grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
+                  plugins:{ legend:{ position:'top', labels:{ font:{ size:13 } } },
+                    tooltip:{ callbacks:{ label:function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } }
+              });
             } else {
-              opts = { scales:{ y:{ min:40, max:100, ticks:{ stepSize:10 }, grid:{ color:'#cfd3c7' } },
-                x:{ grid:{ display:false }, ticks:{ font:{ size:13, weight:'700' } } } },
-                plugins:{ legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label:function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
+              // GAUGES: one dial per shared event; each athlete an arc on it.
+              var host = document.getElementById('gauges');
+              function polar(cx, cy, r, deg){
+                var a = (deg-180) * Math.PI/180;
+                return [cx + r*Math.cos(a), cy + r*Math.sin(a)];
+              }
+              function arcPath(cx, cy, r, startDeg, endDeg){
+                var s = polar(cx,cy,r,startDeg), e = polar(cx,cy,r,endDeg);
+                var large = (endDeg-startDeg) > 180 ? 1 : 0;
+                return 'M '+s[0]+' '+s[1]+' A '+r+' '+r+' 0 '+large+' 1 '+e[0]+' '+e[1];
+              }
+              labels.forEach(function(evt, idx){
+                var wrap = document.createElement('div');
+                wrap.style.cssText = 'text-align:center;';
+                var W=180, H=130, cx=90, cy=110, r=70;
+                var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="200">';
+                // background track (semicircle 0..180)
+                svg += '<path d="'+arcPath(cx,cy,r,0,180)+'" fill="none" stroke="#cfd3c7" stroke-width="12" stroke-linecap="round"/>';
+                // each athlete's arc: score 40..100 maps to 0..180 degrees
+                series.forEach(function(s, si){
+                  var val = s.scores[idx];
+                  var frac = Math.max(0, Math.min(1, (val-40)/60));
+                  var deg = frac*180;
+                  var rr = r - si*10;  // nest arcs so multiple athletes don't overlap
+                  if (deg > 0.5){
+                    svg += '<path d="'+arcPath(cx,cy,rr,0,deg)+'" fill="none" stroke="'+s.color+'" stroke-width="7" stroke-linecap="round"/>';
+                  }
+                });
+                svg += '</svg>';
+                wrap.innerHTML = svg +
+                  '<div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">'+evt+'</div>';
+                // legend of values
+                var vals = series.map(function(s){
+                  return '<span style="color:'+s.color+'; font-weight:700;">'+s.name+': '+s.scores[idx]+'</span>';
+                }).join(' &middot; ');
+                wrap.innerHTML += '<div style="font-size:.75rem; margin-top:.2rem;">'+vals+'</div>';
+                host.appendChild(wrap);
+              });
             }
-            new Chart(document.getElementById('radar'), {
-              type: useRadar ? 'radar' : 'bar',
-              data: { labels: labels, datasets: ds },
-              options: opts
-            });
           })();
         </script>
         {% endif %}
@@ -787,7 +857,8 @@ def compare():
                 summary = fastest_per_event(selected)
                 summary_kind = "fastest"
             comparison = {"labels": labels, "series": series,
-                          "summary": summary, "summary_kind": summary_kind}
+                          "summary": summary, "summary_kind": summary_kind,
+                          "grid": build_grid(selected)}
         except Exception as e:
             print("compare error:", e)
             comparison = None
