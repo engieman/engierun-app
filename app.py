@@ -1,37 +1,25 @@
-import json, os, re, time, traceback
-from urllib.parse import quote, urlparse, parse_qs, unquote
-from bs4 import BeautifulSoup
-from flask import Flask, render_template_string, request, redirect, url_for
+import json
+import math
+import os
+import re
+from datetime import datetime, timedelta, timezone
 
-# curl_cffi impersonates a real browser's TLS fingerprint so protected sites
-# don't block us at the handshake. Falls back to plain requests if unavailable.
-try:
-    from curl_cffi import requests as httpx
-    IMPERSONATE = "chrome120"
-    HAVE_CFFI = True
-except Exception:
-    import requests as httpx
-    IMPERSONATE = None
-    HAVE_CFFI = False
+import psycopg2
+from flask import Flask, render_template, request
+
+from engierun.comparison import compare_personal_bests
+from engierun.predictor import InsufficientHistoryError, predict_next_performance
+from engierun.recent_form import compare_recent_form
 
 app = Flask(__name__)
 DATA_FILE = "athletes.json"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.google.com/",
-}
 
-
-def _get(url, method="get"):
-    kwargs = {"headers": HEADERS, "timeout": 20}
-    if HAVE_CFFI:
-        kwargs["impersonate"] = IMPERSONATE
-    return getattr(httpx, method)(url, **kwargs)
-
+@app.context_processor
+def dataset_mode():
+    configured = os.environ.get("ENGIERUN_DATASET", "data/demo_athletes.json")
+    is_demo = not os.environ.get("DATABASE_URL") and os.path.basename(configured) == "demo_athletes.json"
+    return {"demo_data": is_demo}
 
 SAMPLE = {}
 
@@ -67,7 +55,7 @@ EVENT_BOUNDS = {
 
 def match_event(text):
     for canon, pat in EVENT_PATTERNS:
-        if re.search(pat, text, re.I):
+        if re.search(pat, text, re.IGNORECASE):
             return canon
     return None
 
@@ -90,100 +78,130 @@ def detect_category(page_text):
 
 # --- Storage: Postgres if DATABASE_URL is set (Render), else JSON (local) ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
+_DB = DATABASE_URL.replace("postgres://", "postgresql://", 1) if DATABASE_URL else ""
+
+
+def _db_conn():
+    if not _DB:
+        raise RuntimeError("DATABASE_URL is not configured")
+    return psycopg2.connect(_DB)
+
+
+_ATHLETE_SELECT = """
+SELECT record->>'name', record->>'school', record->>'marks',
+       record->>'category', record->>'results'
+FROM (SELECT to_jsonb(athletes) AS record FROM athletes) AS rows
+"""
+
 
 if DATABASE_URL:
-    import psycopg2
-    _DB = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-    def _db_conn():
-        return psycopg2.connect(_DB)
-
-    def _db_init():
-        with _db_conn() as conn, conn.cursor() as cur:
-            cur.execute("""CREATE TABLE IF NOT EXISTS athletes (
-                               name TEXT PRIMARY KEY,
-                               school TEXT,
-                               marks TEXT)""")
-            # Add the category column if this is an older table missing it.
-            cur.execute("""SELECT column_name FROM information_schema.columns
-                           WHERE table_name='athletes' AND column_name='category'""")
-            if not cur.fetchone():
-                cur.execute("ALTER TABLE athletes ADD COLUMN category TEXT")
-            conn.commit()
-
     def load_athletes():
         try:
-            _db_init()
             with _db_conn() as conn, conn.cursor() as cur:
-                cur.execute("SELECT name, school, marks, category FROM athletes")
+                cur.execute(_ATHLETE_SELECT)
                 rows = cur.fetchall()
             out = {}
-            for name, school, marks, category in rows:
+            for name, school, marks, category, results in rows:
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("database athlete row is missing a name")
                 try:
                     m = json.loads(marks) if marks else {}
-                except Exception:
+                    if not isinstance(m, dict):
+                        m = {}
+                except (json.JSONDecodeError, TypeError):
                     m = {}
-                out[clean_name(name)] = {"school": school or "",
-                                         "category": category or "",
-                                         "marks": {k: str(v) for k, v in m.items()}}
+                try:
+                    race_results = json.loads(results) if results else []
+                    if not isinstance(race_results, list):
+                        race_results = []
+                except (json.JSONDecodeError, TypeError):
+                    race_results = []
+                out[clean_name(name)] = {
+                    "school": school or "",
+                    "category": category or "",
+                    "marks": {k: str(v) for k, v in m.items()},
+                    "results": race_results,
+                }
             return out
-        except Exception as e:
-            print("db load error:", e)
+        except (psycopg2.Error, OSError, ValueError, TypeError) as exc:
+            app.logger.error("database load failed: %s", exc)
             return {}
 
-    def save_athletes(data):
-        try:
-            with _db_conn() as conn, conn.cursor() as cur:
-                cur.execute("DELETE FROM athletes")
-                for name, d in data.items():
-                    cur.execute(
-                        "INSERT INTO athletes (name, school, marks, category) VALUES (%s,%s,%s,%s)",
-                        (name, d.get("school", ""), json.dumps(d.get("marks", {})),
-                         d.get("category", "")))
-                conn.commit()
-        except Exception as e:
-            print("db save error:", e)
-
 else:
+    def _bundled_athletes():
+        """Load a compiled dataset, falling back to the checked-in synthetic demo."""
+        default_snapshot = os.path.join(
+            os.path.dirname(__file__), "data", "demo_athletes.json"
+        )
+        snapshot = os.environ.get("ENGIERUN_DATASET", default_snapshot)
+        try:
+            with open(snapshot) as handle:
+                rows = json.load(handle).get("athletes", [])
+            loaded = {}
+            for row in rows:
+                if not isinstance(row, dict) or not row.get("name"):
+                    continue
+                raw_marks = row.get("marks")
+                if not isinstance(raw_marks, dict):
+                    raw_marks = {
+                        event: value.get("mark")
+                        for event, value in row.get("bests", {}).items()
+                        if isinstance(value, dict) and value.get("mark")
+                    }
+                loaded[clean_name(row["name"])] = {
+                    "id": row.get("id"),
+                    "school": row.get("school", ""),
+                    "category": row.get("category", row.get("gender", "")),
+                    "year": row.get("year"),
+                    "profile_url": row.get("profile_url"),
+                    "marks": {key: str(value) for key, value in raw_marks.items()},
+                    "results": row.get("results", []),
+                }
+            return loaded
+        except (OSError, ValueError, TypeError):
+            return {}
+
     def load_athletes():
         if not os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "w") as f:
-                json.dump(SAMPLE, f, indent=2)
+            return _bundled_athletes()
         try:
             with open(DATA_FILE) as f:
                 data = json.load(f)
             if not isinstance(data, dict):
-                raise ValueError("athletes file is not a JSON object")
+                raise TypeError("athletes file is not a JSON object")
             clean = {}
             for name, d in data.items():
                 if isinstance(d, dict) and isinstance(d.get("marks"), dict):
-                    clean[clean_name(name)] = {"school": d.get("school", ""),
-                                   "category": d.get("category", ""),
-                                   "marks": {k: str(v) for k, v in d["marks"].items()}}
+                    clean[clean_name(name)] = {
+                        "school": d.get("school", ""),
+                        "category": d.get("category", ""),
+                        "marks": {k: str(v) for k, v in d["marks"].items()},
+                        "results": d.get("results", []),
+                    }
             return clean
-        except Exception as e:
-            print("athletes.json unreadable, backing up and reseeding:", e)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            app.logger.warning(
+                "athletes.json unreadable; using bundled data: %s", exc
+            )
             try:
                 os.replace(DATA_FILE, DATA_FILE + ".corrupt")
-            except Exception:
-                pass
-            with open(DATA_FILE, "w") as f:
-                json.dump(SAMPLE, f, indent=2)
-            return dict(SAMPLE)
-
-    def save_athletes(data):
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+            except OSError as backup_error:
+                app.logger.warning("could not preserve corrupt athletes file: %s", backup_error)
+            return _bundled_athletes()
 
 
 def time_to_seconds(mark):
-    if not mark:
+    if isinstance(mark, bool) or mark is None:
         return None
-    m = re.search(r"(?:(\d+):)?(\d+(?:\.\d+)?)", str(mark).strip())
-    if not m:
+    match = re.fullmatch(r"(?:(\d+):)?(\d+(?:\.\d+)?)", str(mark).strip())
+    if not match:
         return None
-    mins = int(m.group(1)) if m.group(1) else 0
-    return mins * 60 + float(m.group(2))
+    minutes = int(match.group(1)) if match.group(1) else 0
+    seconds = float(match.group(2))
+    if match.group(1) and seconds >= 60:
+        return None
+    total = minutes * 60 + seconds
+    return total if math.isfinite(total) and total > 0 else None
 
 
 def axis_seconds(marks, events):
@@ -226,323 +244,6 @@ def label_strength_weakness(labels, scores):
     return max(pairs, key=lambda p: p[1])[0], min(pairs, key=lambda p: p[1])[0]
 
 
-def tfrrs_fetch_athlete(url):
-    try:
-        time.sleep(1)
-        resp = _get(url)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        name = "Unknown"
-        if soup.title and soup.title.string:
-            name = re.split(r"[|\-–]", soup.title.string)[0].strip()
-        heading = soup.find(["h1", "h2", "h3"])
-        if heading and heading.get_text(strip=True):
-            name = heading.get_text(strip=True)
-        name = clean_name(name)
-
-        school = ""
-        team_link = soup.find("a", href=re.compile(r"/teams/"))
-        if team_link and team_link.get_text(strip=True):
-            school = team_link.get_text(strip=True)
-        elif soup.title and soup.title.string and "|" in soup.title.string:
-            school = soup.title.string.split("|", 1)[1].strip()
-        school = re.sub(r"\s+", " ", school).strip()
-
-        category = detect_category(soup.get_text(" ", strip=True)[:4000])
-
-        marks = {}
-        for row in soup.find_all("tr"):
-            cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
-            if not cells:
-                continue
-            event = match_event(cells[0]) or match_event(" ".join(cells))
-            mark = next((c for c in cells[1:]
-                         if re.search(r"\d+:\d|\d+\.\d", c) and time_to_seconds(c)), None)
-            if event and mark and event not in marks:
-                m = re.search(r"\d+:\d+(?:\.\d+)?|\d+\.\d+", mark)
-                clean_mark = m.group(0) if m else mark
-                secs = time_to_seconds(clean_mark)
-                lo, hi = EVENT_BOUNDS.get(event, (0, 1e9))
-                if secs and lo <= secs <= hi:
-                    marks[event] = clean_mark
-        return {"name": name, "school": school, "category": category, "marks": marks}
-    except Exception as e:
-        print("fetch error:", e)
-        traceback.print_exc()
-        return None
-
-
-PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EngieRun Compare</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <style>
-    :root { --ink:#16211c; --paper:#eef0e9; --lane:#c8532a; --lane-b:#2f6f6b; --line:#cfd3c7; }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:"Segoe UI",system-ui,sans-serif; background:var(--paper); color:var(--ink); line-height:1.5; padding:2rem 1.25rem 4rem; }
-    .wrap { max-width:900px; margin:0 auto; }
-    header { border-bottom:3px solid var(--ink); padding-bottom:.75rem; margin-bottom:2rem; }
-    .eyebrow { font-size:.8rem; text-transform:uppercase; letter-spacing:.18em; color:#5b665e; }
-    h1 { font-size:clamp(1.8rem,5vw,3rem); font-weight:800; letter-spacing:-0.03em; text-transform:uppercase; }
-    nav { display:flex; gap:1.25rem; margin-top:.6rem; flex-wrap:wrap; }
-    nav a { text-decoration:none; color:var(--ink); font-weight:700; font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; border-bottom:2px solid transparent; padding-bottom:2px; }
-    nav a:hover, nav a.active { border-bottom-color:var(--lane); }
-    .btn { display:inline-block; padding:.55rem 1.4rem; background:var(--ink); color:var(--paper); border:none; text-decoration:none; font-weight:700; text-transform:uppercase; letter-spacing:.1em; cursor:pointer; font-size:.85rem; }
-    .btn:hover { background:var(--lane); }
-    .btn-ghost { background:transparent; color:var(--ink); border:2px solid var(--ink); }
-    .btn-ghost:hover { background:var(--ink); color:var(--paper); }
-    input, select { padding:.55rem; border:1px solid var(--ink); background:#fff; font-size:1rem; width:100%; }
-    label { font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; font-weight:700; display:block; margin-bottom:.3rem; }
-    .field { margin-bottom:1rem; }
-    .card { border:2px solid var(--ink); padding:1.1rem; background:#fff; }
-    .tag { display:inline-block; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:.2rem .5rem; border-radius:3px; margin:.15rem .15rem 0 0; }
-    .strong { background:#d8ecd3; color:#1f5c2e; }
-    .weak { background:#f6dcd2; color:#8a3316; }
-    .cat { background:#e4e9f5; color:#2f3f6b; }
-    .msg { background:#fff5e6; border:1px solid #e0a94f; padding:.6rem .8rem; font-size:.8rem; margin-bottom:1rem; }
-    .filterbar { display:flex; gap:.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
-    .filterbar a { text-decoration:none; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:.35rem .8rem; border:2px solid var(--ink); color:var(--ink); }
-    .filterbar a.active { background:var(--ink); color:var(--paper); }
-    table { width:100%; border-collapse:collapse; font-size:.9rem; }
-    td { padding:.3rem 0; border-bottom:1px solid var(--line); }
-    .school { font-size:.75rem; text-transform:uppercase; letter-spacing:.1em; color:#5b665e; }
-    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.4rem; }
-    .searchable { position:relative; }
-    .searchable .options { position:absolute; z-index:10; left:0; right:0; background:#fff; border:1px solid var(--ink); border-top:none; max-height:220px; overflow-y:auto; display:none; }
-    .searchable.open .options { display:block; }
-    .searchable .opt { padding:.45rem .55rem; cursor:pointer; font-size:.9rem; border-bottom:1px solid var(--line); }
-    .searchable .opt:hover { background:var(--paper); }
-    .searchable .opt.hidden { display:none; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <header>
-      <div class="eyebrow">Collegiate Track &amp; Field</div>
-      <h1>EngieRun Compare</h1>
-      <nav>
-        <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Home</a>
-        <a href="{{ url_for('athletes_page') }}" class="{{ 'active' if page=='athletes' }}">Athletes</a>
-        <a href="{{ url_for('compare') }}" class="{{ 'active' if page=='compare' }}">Compare</a>
-        <a href="{{ url_for('add') }}" class="{{ 'active' if page=='add' }}">Add manually</a>
-      </nav>
-    </header>
-
-    {% if page == 'home' %}
-      <div class="card" style="margin-bottom:1.5rem;">
-        <label for="tfrrs_url">Paste a TFRRS profile link to import an athlete</label>
-        <form method="get" action="{{ url_for('import_athlete') }}" style="display:flex; gap:.75rem;">
-          <input type="text" id="tfrrs_url" name="url" placeholder="https://www.tfrrs.org/athletes/...">
-          <button class="btn" type="submit">Import</button>
-        </form>
-        <p style="font-size:.75rem; color:#5b665e; margin-top:.5rem;">Or use "Add manually" to type in marks yourself.</p>
-      </div>
-
-      {% if import_failed %}
-        <div class="msg">Couldn't read marks from that link. Make sure it's a full athlete URL (contains /athletes/), or use "Add manually".</div>
-      {% endif %}
-
-      <div class="card" style="text-align:center; padding:2rem 1.1rem;">
-        <div style="font-size:2.5rem; font-weight:800;">{{ total }}</div>
-        <div class="school" style="margin-bottom:1rem;">athletes in the database</div>
-        <a class="btn" href="{{ url_for('athletes_page') }}">View all athletes &rarr;</a>
-        <a class="btn btn-ghost" href="{{ url_for('compare') }}">Compare two &rarr;</a>
-      </div>
-
-    {% elif page == 'athletes' %}
-      <form method="get" style="display:flex; gap:.75rem; margin-bottom:1rem; flex-wrap:wrap;">
-        <input type="text" name="q" value="{{ q }}" placeholder="Search by name or school..." style="flex:2; min-width:200px;">
-        <input type="hidden" name="cat" value="{{ cat_filter }}">
-        <select name="sort" style="flex:1; min-width:160px;">
-          <option value="name" {% if sort_by=='name' %}selected{% endif %}>Sort: Name</option>
-          <option value="school" {% if sort_by=='school' %}selected{% endif %}>Sort: School</option>
-          {% for ev in events %}<option value="event:{{ ev }}" {% if sort_by=='event:'+ev %}selected{% endif %}>Sort: {{ ev }} (fastest)</option>{% endfor %}
-        </select>
-        <button class="btn" type="submit">Go</button>
-      </form>
-
-      <div class="filterbar">
-        <a href="{{ url_for('athletes_page', q=q, sort=sort_by) }}" class="{{ 'active' if not cat_filter }}">All</a>
-        <a href="{{ url_for('athletes_page', cat='Male', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
-        <a href="{{ url_for('athletes_page', cat='Female', q=q, sort=sort_by) }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
-      </div>
-
-      <p style="margin-bottom:1rem; font-size:.85rem; color:#5b665e;">{{ athletes|length }} athletes shown.</p>
-      {% if athletes %}
-        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem;">
-          {% for name, d in athletes.items() %}
-            <div class="card">
-              <h2 style="font-size:1.15rem;">{{ name }}</h2>
-              <div class="school" style="margin-bottom:.4rem;">{{ d.school }}</div>
-              {% if d.category %}<span class="tag cat">{{ d.category }}</span>{% endif %}
-              <table style="margin-top:.6rem;">{% for ev, mk in d.marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
-              <div style="margin-top:.8rem; display:flex; gap:.5rem; flex-wrap:wrap;">
-                <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('compare', a=name) }}">Compare</a>
-                {% if not d.category %}
-                <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Male') }}">Set M</a>
-                <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Female') }}">Set F</a>
-                {% endif %}
-                <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('delete', name=name) }}" onclick="return confirm('Remove {{ name }}?')">Delete</a>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p>No athletes match. <a href="{{ url_for('athletes_page') }}" style="color:var(--lane);">Clear search</a> or add one.</p>
-      {% endif %}
-
-    {% elif page == 'add' %}
-      <div class="card" style="max-width:520px;">
-        <h2 style="margin-bottom:1rem;">Add an athlete</h2>
-        <form method="post">
-          <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" required></div>
-          <div class="field"><label for="school">School</label><input type="text" id="school" name="school"></div>
-          <div class="field"><label for="category">Category</label>
-            <select id="category" name="category">
-              <option value="">— select —</option>
-              {% for cval in categories %}<option value="{{ cval }}">{{ cval }}</option>{% endfor %}
-            </select>
-          </div>
-          <p style="font-size:.75rem; color:#5b665e; margin-bottom:.8rem;">Enter marks as on TFRRS (e.g. 14:20.50). Leave blank to skip.</p>
-          {% for ev in events %}
-            <div class="field"><label for="{{ ev }}">{{ ev }}</label><input type="text" id="{{ ev }}" name="{{ ev }}" placeholder="mm:ss.xx"></div>
-          {% endfor %}
-          <button class="btn" type="submit">Save athlete</button>
-          <a class="btn btn-ghost" href="{{ url_for('home') }}">Cancel</a>
-        </form>
-      </div>
-
-    {% elif page == 'compare' %}
-      <div class="filterbar">
-        <a href="{{ url_for('compare') }}" class="{{ 'active' if not cat_filter }}">All</a>
-        <a href="{{ url_for('compare', cat='Male') }}" class="{{ 'active' if cat_filter=='Male' }}">Male</a>
-        <a href="{{ url_for('compare', cat='Female') }}" class="{{ 'active' if cat_filter=='Female' }}">Female</a>
-      </div>
-      <form method="get" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:2rem;">
-        <input type="hidden" name="cat" value="{{ cat_filter }}">
-        <div class="field" style="margin-bottom:0; flex:1; min-width:180px;">
-          <label>Athlete A</label>
-          <div class="searchable" data-target="a">
-            <input type="text" class="search-in" autocomplete="off" placeholder="Type to search..." value="{{ a_name or '' }}">
-            <input type="hidden" name="a" class="hidden-val" value="{{ a_name or '' }}">
-            <div class="options">
-              {% for n in names %}<div class="opt" data-val="{{ n }}">{{ n }}</div>{% endfor %}
-            </div>
-          </div>
-        </div>
-        <div class="field" style="margin-bottom:0; flex:1; min-width:180px;">
-          <label>Athlete B</label>
-          <div class="searchable" data-target="b">
-            <input type="text" class="search-in" autocomplete="off" placeholder="Type to search..." value="{{ b_name or '' }}">
-            <input type="hidden" name="b" class="hidden-val" value="{{ b_name or '' }}">
-            <div class="options">
-              {% for n in names %}<div class="opt" data-val="{{ n }}">{{ n }}</div>{% endfor %}
-            </div>
-          </div>
-        </div>
-        <button class="btn" type="submit">Compare</button>
-      </form>
-      <script>
-        document.querySelectorAll('.searchable').forEach(function(box){
-          var input = box.querySelector('.search-in');
-          var hidden = box.querySelector('.hidden-val');
-          var opts = box.querySelectorAll('.opt');
-          input.addEventListener('focus', function(){ box.classList.add('open'); });
-          input.addEventListener('input', function(){
-            var qq = input.value.toLowerCase();
-            box.classList.add('open');
-            hidden.value = input.value;
-            opts.forEach(function(o){
-              o.classList.toggle('hidden', o.textContent.toLowerCase().indexOf(qq) === -1);
-            });
-          });
-          opts.forEach(function(o){
-            o.addEventListener('click', function(){
-              input.value = o.textContent;
-              hidden.value = o.getAttribute('data-val');
-              box.classList.remove('open');
-            });
-          });
-          document.addEventListener('click', function(e){
-            if(!box.contains(e.target)) box.classList.remove('open');
-          });
-        });
-      </script>
-
-      {% if c %}
-        {% if c.labels %}
-          <div class="card" style="margin-bottom:2rem;"><canvas id="radar" height="380"></canvas></div>
-        {% else %}
-          <div class="msg">These two athletes share no overlapping events, so there's nothing to chart.</div>
-        {% endif %}
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-          <div class="card">
-            <h2 style="font-size:1.25rem;"><span class="dot" style="background:var(--lane)"></span>{{ c.a_name }}</h2>
-            <div class="school" style="margin-bottom:.4rem;">{{ c.a_school }}</div>
-            {% if c.a_cat %}<span class="tag cat">{{ c.a_cat }}</span>{% endif %}
-            {% if c.a_strength %}<span class="tag strong">Strength: {{ c.a_strength }}</span><span class="tag weak">Weakness: {{ c.a_weakness }}</span>{% endif %}
-            <table style="margin-top:.6rem;">{% for ev, mk in c.a_marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
-          </div>
-          <div class="card">
-            <h2 style="font-size:1.25rem;"><span class="dot" style="background:var(--lane-b)"></span>{{ c.b_name }}</h2>
-            <div class="school" style="margin-bottom:.4rem;">{{ c.b_school }}</div>
-            {% if c.b_cat %}<span class="tag cat">{{ c.b_cat }}</span>{% endif %}
-            {% if c.b_strength %}<span class="tag strong">Strength: {{ c.b_strength }}</span><span class="tag weak">Weakness: {{ c.b_weakness }}</span>{% endif %}
-            <table style="margin-top:.6rem;">{% for ev, mk in c.b_marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
-          </div>
-        </div>
-        {% if c.labels %}
-        <script>
-          (function(){
-            var labels = {{ c.labels | tojson }};
-            var aData = {{ c.a_scores | tojson }};
-            var bData = {{ c.b_scores | tojson }};
-            var aName = {{ c.a_name | tojson }};
-            var bName = {{ c.b_name | tojson }};
-            var useRadar = labels.length >= 3;  // radar needs 3+ axes to form a shape
-            var ds = [
-              { label:aName, data:aData, borderColor:'#c8532a',
-                backgroundColor: useRadar ? 'rgba(200,83,42,0.30)' : '#c8532a',
-                pointBackgroundColor:'#c8532a', borderWidth:2 },
-              { label:bName, data:bData, borderColor:'#2f6f6b',
-                backgroundColor: useRadar ? 'rgba(47,111,107,0.30)' : '#2f6f6b',
-                pointBackgroundColor:'#2f6f6b', borderWidth:2 }
-            ];
-            var opts;
-            if (useRadar) {
-              opts = { scales: { r: { min:40, max:100, ticks:{ stepSize:10 },
-                pointLabels:{ font:{ size:14, weight:'700' } },
-                grid:{ color:'#cfd3c7' }, angleLines:{ color:'#cfd3c7' } } },
-                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
-            } else {
-              opts = { scales: { y: { min:40, max:100, ticks:{ stepSize:10 },
-                grid:{ color:'#cfd3c7' } }, x: { grid:{ display:false },
-                ticks:{ font:{ size:13, weight:'700' } } } },
-                plugins: { legend:{ position:'top', labels:{ font:{ size:13 } } },
-                  tooltip:{ callbacks:{ label: function(ctx){ return ctx.dataset.label+': '+ctx.raw; } } } } };
-            }
-            new Chart(document.getElementById('radar'), {
-              type: useRadar ? 'radar' : 'bar',
-              data: { labels: labels, datasets: ds },
-              options: opts
-            });
-          })();
-        </script>
-        {% endif %}
-      {% else %}
-        <p>Select two athletes above to see their runner-type profiles compared.</p>
-      {% endif %}
-    {% endif %}
-  </div>
-</body>
-</html>
-"""
-
-
 def filter_by_category(athletes, cat):
     if not cat:
         return athletes
@@ -583,12 +284,161 @@ def apply_view(athletes, q, cat, sort_by):
     return out
 
 
+@app.template_filter("race_time")
+def format_race_time(seconds):
+    """Format numeric race seconds as a compact track mark."""
+    if seconds is None:
+        return "—"
+    minutes, remainder = divmod(float(seconds), 60)
+    if minutes:
+        return f"{int(minutes)}:{remainder:05.2f}"
+    return f"{remainder:.2f}"
+
+
+def _score_label(value):
+    return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+
+
+def _load_predictor_benchmark():
+    path = os.path.join(os.path.dirname(__file__), "data", "predictor_benchmark.json")
+    try:
+        with open(path) as handle:
+            return json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return {
+            "final_metrics": {"count": 0, "hits": 0, "hit_rate_percent": 0},
+            "caveat": "Benchmark artifact is unavailable.",
+        }
+
+
+def _prediction_records(athletes):
+    rows = []
+    for athlete_name, athlete in athletes.items():
+        for result in athlete.get("results", []):
+            if not isinstance(result, dict):
+                continue
+            row = dict(result)
+            row["athlete_id"] = athlete_name
+            rows.append(row)
+    return rows
+
+
 @app.route("/")
 def home():
     athletes = load_athletes()
-    return render_template_string(
-        PAGE, page="home", total=len(athletes),
-        import_failed=request.args.get("failed") == "1")
+    return render_template(
+        "index.html", page="home", total=len(athletes),
+        athletes_preview=list(sort_athletes(athletes, "name").items())[:3])
+
+
+@app.get("/health")
+def health():
+    if DATABASE_URL:
+        athletes = load_athletes()
+        if not athletes:
+            return {
+                "status": "unhealthy",
+                "storage": "postgres",
+                "reason": "database_dataset_unavailable",
+            }, 503
+        return {
+            "status": "ready",
+            "storage": "postgres",
+            "athletes": len(athletes),
+        }
+
+    default_dataset = os.path.join(os.path.dirname(__file__), "data", "demo_athletes.json")
+    source = DATA_FILE if os.path.exists(DATA_FILE) else os.environ.get(
+        "ENGIERUN_DATASET", default_dataset
+    )
+    try:
+        with open(source, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            raise TypeError("dataset root must be an object")
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return {
+            "status": "unhealthy",
+            "storage": "json",
+            "reason": "dataset_unavailable",
+        }, 503
+    athletes = load_athletes()
+    if not athletes:
+        return {
+            "status": "unhealthy",
+            "storage": "json",
+            "reason": "dataset_empty_or_invalid",
+        }, 503
+    return {
+        "status": "ready",
+        "storage": "json",
+        "athletes": len(athletes),
+    }
+
+
+@app.route("/predictor", methods=["GET", "POST"])
+def predictor_page():
+    athletes = load_athletes()
+    names = sorted(athletes)
+    event = request.values.get("event", "1500m")
+    if event not in EVENTS:
+        event = "1500m"
+    selected = request.values.get("athlete", "")
+    target_text = request.values.get(
+        "target_date",
+        (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat(),
+    )
+    manual_marks = [request.values.get(f"r{i}", "").strip() for i in range(1, 5)]
+    forecast = None
+    prediction_error = None
+
+    if request.method == "POST":
+        try:
+            target = datetime.fromisoformat(target_text).date()
+            records = _prediction_records(athletes)
+            supplied_seconds = [time_to_seconds(mark) for mark in manual_marks]
+            valid_seconds = [seconds for seconds in supplied_seconds if seconds is not None]
+            if any(manual_marks) and len(valid_seconds) != 4:
+                raise ValueError("Enter four valid race times or leave all four blank.")
+            if len(valid_seconds) == 4:
+                lower, upper = EVENT_BOUNDS[event]
+                if any(not lower <= seconds <= upper for seconds in valid_seconds):
+                    raise ValueError(f"Enter realistic {event} times within the supported range.")
+                athlete_id = "manual-forecast"
+                records.extend(
+                    {
+                        "athlete_id": athlete_id,
+                        "event": event,
+                        "date": (target - timedelta(days=35 - index * 7)).isoformat(),
+                        "seconds": seconds,
+                        "meet": f"Recent result {index}",
+                    }
+                    for index, seconds in enumerate(valid_seconds, start=1)
+                )
+            elif selected in athletes:
+                athlete_id = selected
+            else:
+                raise ValueError("Select an athlete with history or enter four recent times.")
+            forecast = predict_next_performance(
+                records, athlete_id=athlete_id, event=event, cutoff=target
+            )
+        except (ValueError, InsufficientHistoryError) as exc:
+            prediction_error = str(exc)
+
+    return render_template(
+        "index.html",
+        page="predictor",
+        total=len(athletes),
+        names=names,
+        selected=selected,
+        event=event,
+        target_date=target_text,
+        manual_marks=manual_marks,
+        forecast=forecast,
+        prediction_error=prediction_error,
+        benchmark=_load_predictor_benchmark(),
+        events=EVENTS,
+    )
 
 
 @app.route("/athletes")
@@ -598,58 +448,9 @@ def athletes_page():
     q = request.args.get("q", "").strip()
     sort_by = request.args.get("sort", "name")
     shown = apply_view(athletes, q, cat_filter, sort_by)
-    return render_template_string(
-        PAGE, page="athletes", athletes=shown, cat_filter=cat_filter,
+    return render_template(
+        "index.html", page="athletes", athletes=shown, cat_filter=cat_filter,
         q=q, sort_by=sort_by, events=EVENTS)
-
-
-@app.route("/import")
-def import_athlete():
-    url = request.args.get("url", "").strip()
-    if url and "tfrrs.org" in url:
-        data = tfrrs_fetch_athlete(url)
-        if data and data["marks"]:
-            athletes = load_athletes()
-            athletes[data["name"]] = {"school": data["school"],
-                                      "category": data.get("category", ""),
-                                      "marks": data["marks"]}
-            save_athletes(athletes)
-            return redirect(url_for("home"))
-    return redirect(url_for("home", failed="1"))
-
-
-@app.route("/add", methods=["GET", "POST"])
-def add():
-    if request.method == "POST":
-        name = clean_name(request.form.get("name", "").strip())
-        school = request.form.get("school", "").strip()
-        category = request.form.get("category", "").strip()
-        marks = {ev: request.form.get(ev, "").strip()
-                 for ev in EVENTS if request.form.get(ev, "").strip()}
-        if name and marks:
-            athletes = load_athletes()
-            athletes[name] = {"school": school, "category": category, "marks": marks}
-            save_athletes(athletes)
-            return redirect(url_for("athletes_page"))
-    return render_template_string(PAGE, page="add", events=EVENTS, categories=CATEGORIES)
-
-
-@app.route("/set_category/<name>/<cat>")
-def set_category(name, cat):
-    athletes = load_athletes()
-    if name in athletes and cat in CATEGORIES:
-        athletes[name]["category"] = cat
-        save_athletes(athletes)
-    return redirect(url_for("athletes_page"))
-
-
-@app.route("/delete/<name>")
-def delete(name):
-    athletes = load_athletes()
-    if name in athletes:
-        del athletes[name]
-        save_athletes(athletes)
-    return redirect(url_for("athletes_page"))
 
 
 @app.route("/compare")
@@ -657,40 +458,63 @@ def compare():
     athletes = load_athletes()
     cat_filter = request.args.get("cat", "")
     shown = filter_by_category(athletes, cat_filter)
-    names = sorted(shown.keys(),
-                   key=lambda n: (n.strip().split()[-1].lower() if n.strip() else n.lower(), n.lower()))
+    names = sorted(
+        shown,
+        key=lambda n: (n.strip().split()[-1].lower() if n.strip() else n.lower(), n.lower()),
+    )
     a_name = request.args.get("a")
     b_name = request.args.get("b")
+    event = request.args.get("event", "")
     comparison = None
+
     if a_name in athletes and b_name in athletes:
-        try:
-            a, b = athletes[a_name], athletes[b_name]
-            labels, a_scores, b_scores = compare_axes(a["marks"], b["marks"])
-            a_str, a_weak = label_strength_weakness(labels, a_scores)
-            b_str, b_weak = label_strength_weakness(labels, b_scores)
-            comparison = {
-                "a_name": a_name, "b_name": b_name,
-                "a_school": a["school"], "b_school": b["school"],
-                "a_cat": a.get("category", ""), "b_cat": b.get("category", ""),
-                "labels": labels, "a_scores": a_scores, "b_scores": b_scores,
-                "a_strength": a_str, "a_weakness": a_weak,
-                "b_strength": b_str, "b_weakness": b_weak,
-                "a_marks": a["marks"], "b_marks": b["marks"],
-            }
-        except Exception as e:
-            print("compare error:", e)
-            comparison = {"a_name": a_name, "b_name": b_name,
-                          "a_school": "", "b_school": "", "a_cat": "", "b_cat": "",
-                          "labels": [], "a_scores": [], "b_scores": [],
-                          "a_strength": None, "a_weakness": None,
-                          "b_strength": None, "b_weakness": None,
-                          "a_marks": athletes[a_name].get("marks", {}),
-                          "b_marks": athletes[b_name].get("marks", {})}
-    return render_template_string(PAGE, page="compare", names=names,
-                                  a_name=a_name, b_name=b_name, c=comparison,
-                                  cat_filter=cat_filter)
+        a, b = athletes[a_name], athletes[b_name]
+        head_to_head = compare_personal_bests(a.get("marks", {}), b.get("marks", {}))
+        available_events = [row["event"] for row in head_to_head["events"]]
+
+        form_comparisons = {
+            ev: compare_recent_form(
+                a.get("results", []), b.get("results", []), event=ev, limit=4
+            )
+            for ev in EVENTS
+        }
+        form_events = [
+            ev
+            for ev, form in form_comparisons.items()
+            if form["a_sample_size"] and form["b_sample_size"]
+        ]
+        if not event:
+            event = form_events[0] if form_events else (available_events[0] if available_events else "")
+        if event not in EVENTS and event not in available_events:
+            event = ""
+
+        recent = form_comparisons.get(event) if event else None
+
+        comparison = {
+            "a_name": a_name,
+            "b_name": b_name,
+            "a": a,
+            "b": b,
+            "h2h": head_to_head,
+            "scoreline": f"{_score_label(head_to_head['a_points'])}–{_score_label(head_to_head['b_points'])}",
+            "available_events": available_events,
+            "form_events": form_events,
+            "event": event,
+            "recent": recent,
+        }
+
+    return render_template(
+        "index.html",
+        page="compare",
+        names=names,
+        a_name=a_name,
+        b_name=b_name,
+        c=comparison,
+        cat_filter=cat_filter,
+        events=EVENTS,
+    )
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host=os.environ.get("HOST", "127.0.0.1"), port=port)
