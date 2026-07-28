@@ -403,7 +403,7 @@ PAGE = """
   <title>Engieneer</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root { --ink:#16211c; --paper:#eef0e9; --lane:#c8532a; --lane-b:#2f6f6b; --line:#cfd3c7; }
+    :root { --ink:#16211c; --paper:#eef0e9; --lane:#00693e; --lane-b:#2f6f6b; --line:#cfd3c7; }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:"Segoe UI",system-ui,sans-serif; background:var(--paper); color:var(--ink); line-height:1.5; padding:2rem 1.25rem 4rem; }
     .wrap { max-width:900px; margin:0 auto; }
@@ -1046,7 +1046,7 @@ def compare():
             selected = [(n, athletes[n]["marks"]) for n in selected_names]
             labels, data = multi_compare(selected)
             # colors cycle for each athlete
-            palette = ["#c8532a", "#2f6f6b", "#c99a2e", "#4b6cb7", "#8a3b8f", "#3f8c4f"]
+            palette = ["#00693e", "#2f6f6b", "#c99a2e", "#4b6cb7", "#8a3b8f", "#c8532a"]
             series = []
             for i, n in enumerate(selected_names):
                 col = palette[i % len(palette)]
