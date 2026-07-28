@@ -383,6 +383,29 @@ PAGE = """
     .searchable .opt { padding:.45rem .55rem; cursor:pointer; font-size:.9rem; border-bottom:1px solid var(--line); }
     .searchable .opt:hover { background:var(--paper); }
     .searchable .opt.hidden { display:none; }
+
+    /* Inputs at 16px+ prevent iOS auto-zoom on focus */
+    input, select { font-size:16px; }
+    /* Comfortable tap targets */
+    .btn { min-height:38px; }
+    .filterbar a { min-height:34px; display:inline-flex; align-items:center; }
+
+    @media (max-width: 640px) {
+      body { padding:1.25rem .85rem 3rem; }
+      header { margin-bottom:1.25rem; }
+      nav { gap:.85rem; }
+      nav a { font-size:.72rem; }
+      h1 { font-size:2rem; }
+      .card { padding:.9rem; }
+      /* Cards stack to one column on phones */
+      .wrap [style*="grid-template-columns:repeat(auto-fill"] { grid-template-columns:1fr !important; }
+      .wrap [style*="grid-template-columns:1fr 1fr"] { grid-template-columns:1fr !important; }
+      /* Compare pickers and forms stack instead of sitting in a tight row */
+      #cmpform .picker-row { flex-wrap:wrap; }
+      table { font-size:.85rem; }
+      /* Let wide tables scroll rather than squish */
+      .card { overflow-x:auto; }
+    }
   </style>
 </head>
 <body>
@@ -448,6 +471,7 @@ PAGE = """
               <table style="margin-top:.6rem;">{% for ev, mk in d.marks.items() %}<tr><td>{{ ev }}</td><td style="text-align:right; font-weight:600;">{{ mk }}</td></tr>{% endfor %}</table>
               <div style="margin-top:.8rem; display:flex; gap:.5rem; flex-wrap:wrap;">
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('compare', a=name) }}">Compare</a>
+                <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('edit', name=name) }}">Edit</a>
                 {% if not d.category %}
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Male') }}">Set M</a>
                 <a class="btn btn-ghost" style="padding:.3rem .8rem; font-size:.7rem;" href="{{ url_for('set_category', name=name, cat='Female') }}">Set F</a>
@@ -479,6 +503,27 @@ PAGE = """
           {% endfor %}
           <button class="btn" type="submit">Save athlete</button>
           <a class="btn btn-ghost" href="{{ url_for('home') }}">Cancel</a>
+        </form>
+      </div>
+
+    {% elif page == 'edit' %}
+      <div class="card" style="max-width:520px;">
+        <h2 style="margin-bottom:1rem;">Edit {{ orig_name }}</h2>
+        <form method="post">
+          <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" value="{{ ath.name }}" required></div>
+          <div class="field"><label for="school">School</label><input type="text" id="school" name="school" value="{{ ath.school }}"></div>
+          <div class="field"><label for="category">Category</label>
+            <select id="category" name="category">
+              <option value="">— select —</option>
+              {% for cval in categories %}<option value="{{ cval }}" {% if ath.category==cval %}selected{% endif %}>{{ cval }}</option>{% endfor %}
+            </select>
+          </div>
+          <p style="font-size:.75rem; color:#5b665e; margin-bottom:.8rem;">Edit marks as needed. Clear a field to remove that mark.</p>
+          {% for ev in events %}
+            <div class="field"><label for="{{ ev }}">{{ ev }}</label><input type="text" id="{{ ev }}" name="{{ ev }}" value="{{ ath.marks.get(ev, '') }}" placeholder="mm:ss.xx"></div>
+          {% endfor %}
+          <button class="btn" type="submit">Save changes</button>
+          <a class="btn btn-ghost" href="{{ url_for('athletes_page') }}">Cancel</a>
         </form>
       </div>
 
@@ -797,6 +842,31 @@ def add():
             save_athletes(athletes)
             return redirect(url_for("athletes_page"))
     return render_template_string(PAGE, page="add", events=EVENTS, categories=CATEGORIES)
+
+
+@app.route("/edit/<name>", methods=["GET", "POST"])
+def edit(name):
+    athletes = load_athletes()
+    if name not in athletes:
+        return redirect(url_for("athletes_page"))
+    if request.method == "POST":
+        new_name = clean_name(request.form.get("name", "").strip())
+        school = request.form.get("school", "").strip()
+        category = request.form.get("category", "").strip()
+        marks = {ev: request.form.get(ev, "").strip()
+                 for ev in EVENTS if request.form.get(ev, "").strip()}
+        if new_name and marks:
+            # If the name changed, remove the old entry (this is a rename).
+            if new_name != name and name in athletes:
+                del athletes[name]
+            athletes[new_name] = {"school": school, "category": category, "marks": marks}
+            save_athletes(athletes)
+            return redirect(url_for("athletes_page"))
+    a = athletes[name]
+    ath = {"name": name, "school": a.get("school", ""),
+           "category": a.get("category", ""), "marks": a.get("marks", {})}
+    return render_template_string(PAGE, page="edit", ath=ath, orig_name=name,
+                                  events=EVENTS, categories=CATEGORIES)
 
 
 @app.route("/set_category/<name>/<cat>")
