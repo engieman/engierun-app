@@ -344,7 +344,7 @@ PAGE = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EngieRun Compare</title>
+  <title>Engieneer</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     :root { --ink:#16211c; --paper:#eef0e9; --lane:#c8532a; --lane-b:#2f6f6b; --line:#cfd3c7; }
@@ -412,7 +412,8 @@ PAGE = """
   <div class="wrap">
     <header>
       <div class="eyebrow">Collegiate Track &amp; Field</div>
-      <h1>EngieRun Compare</h1>
+      <h1>Engieneer</h1>
+      <p style="font-size:.9rem; color:#5b665e; margin:.15rem 0 .1rem;">Build, compare, and break down runner profiles.</p>
       <nav>
         <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Home</a>
         <a href="{{ url_for('athletes_page') }}" class="{{ 'active' if page=='athletes' }}">Athletes</a>
