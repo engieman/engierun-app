@@ -76,6 +76,26 @@ def test_health_rejects_a_json_object_that_is_not_an_athlete_dataset(
     assert response.get_json()["reason"] == "dataset_empty_or_invalid"
 
 
+def test_health_rejects_named_json_rows_without_usable_marks(monkeypatch, tmp_path):
+    invalid = tmp_path / "unusable.json"
+    invalid.write_text(
+        '{"athletes":[{"name":"Named but unusable","school":"Brown",'
+        '"gender":"Male","marks":{},"results":[]}]}',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("ENGIERUN_DATASET", str(invalid))
+    monkeypatch.chdir(tmp_path)
+
+    import app
+
+    importlib.reload(app)
+    response = app.app.test_client().get("/health")
+
+    assert response.status_code == 503
+    assert response.get_json()["reason"] == "dataset_empty_or_invalid"
+
+
 class _FakeCursor:
     def __init__(self, rows=None, failure=None):
         self.rows = rows or []
@@ -125,6 +145,18 @@ def test_postgres_health_fails_when_dataset_query_fails_after_connection(
     monkeypatch, tmp_path
 ):
     cursor = _FakeCursor(failure=psycopg2.OperationalError("dataset unavailable"))
+    app = _load_postgres_app(monkeypatch, tmp_path, cursor)
+
+    response = app.app.test_client().get("/health")
+
+    assert response.status_code == 503
+    assert response.get_json()["reason"] == "database_dataset_unavailable"
+
+
+def test_postgres_health_rejects_named_rows_without_usable_marks(monkeypatch, tmp_path):
+    cursor = _FakeCursor(
+        rows=[("Named but unusable", "Brown", "{}", "Male", "[]")]
+    )
     app = _load_postgres_app(monkeypatch, tmp_path, cursor)
 
     response = app.app.test_client().get("/health")

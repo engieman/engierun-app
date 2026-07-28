@@ -181,12 +181,9 @@ else:
             return clean
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             app.logger.warning(
-                "athletes.json unreadable; using bundled data: %s", exc
+                "athletes.json unreadable; using bundled data without modifying it: %s",
+                exc,
             )
-            try:
-                os.replace(DATA_FILE, DATA_FILE + ".corrupt")
-            except OSError as backup_error:
-                app.logger.warning("could not preserve corrupt athletes file: %s", backup_error)
             return _bundled_athletes()
 
 
@@ -323,6 +320,29 @@ def _prediction_records(athletes):
     return rows
 
 
+def _athlete_dataset_is_usable(athletes):
+    if not isinstance(athletes, dict) or not athletes:
+        return False
+    for athlete in athletes.values():
+        if not isinstance(athlete, dict):
+            continue
+        marks = athlete.get("marks", {})
+        if isinstance(marks, dict) and any(
+            event in EVENTS and time_to_seconds(mark) is not None
+            for event, mark in marks.items()
+        ):
+            return True
+        results = athlete.get("results", [])
+        if isinstance(results, list) and any(
+            isinstance(result, dict)
+            and result.get("event") in EVENTS
+            and time_to_seconds(result.get("seconds")) is not None
+            for result in results
+        ):
+            return True
+    return False
+
+
 @app.route("/")
 def home():
     athletes = load_athletes()
@@ -335,7 +355,7 @@ def home():
 def health():
     if DATABASE_URL:
         athletes = load_athletes()
-        if not athletes:
+        if not _athlete_dataset_is_usable(athletes):
             return {
                 "status": "unhealthy",
                 "storage": "postgres",
@@ -363,7 +383,7 @@ def health():
             "reason": "dataset_unavailable",
         }, 503
     athletes = load_athletes()
-    if not athletes:
+    if not _athlete_dataset_is_usable(athletes):
         return {
             "status": "unhealthy",
             "storage": "json",

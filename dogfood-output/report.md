@@ -33,8 +33,8 @@
 
 ## Automated gates
 
-- 72 pytest tests passed in the project environment.
-- 72 pytest tests passed from a fresh pinned-dependency virtual environment.
+- 75 pytest tests passed in the project environment.
+- 75 pytest tests passed from a fresh pinned-dependency virtual environment.
 - Ruff passed.
 - Bandit passed.
 - Python compileall passed.
