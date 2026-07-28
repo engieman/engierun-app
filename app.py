@@ -412,7 +412,7 @@ PAGE = """
   <div class="wrap">
     <header>
       <div class="eyebrow">Collegiate Track &amp; Field</div>
-      <h1>Engieneer</h1>
+      <h1><span style="color:var(--lane);">Engie</span>neer</h1>
       <p style="font-size:.9rem; color:#5b665e; margin:.15rem 0 .1rem;">Build, compare, and break down runner profiles.</p>
       <nav>
         <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Home</a>
