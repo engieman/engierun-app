@@ -41,6 +41,8 @@ AXES = {
     "5k/10k Aerobic Engine": ["5000m", "10000m"],
 }
 EVENTS = ["800m", "1000m", "1500m", "Mile", "3000m", "5000m", "10000m"]
+EVENT_METERS = {"800m": 800, "1000m": 1000, "1500m": 1500, "Mile": 1609,
+                "3000m": 3000, "5000m": 5000, "10000m": 10000}
 CATEGORIES = ["Male", "Female"]
 
 EVENT_PATTERNS = [
@@ -186,6 +188,45 @@ def time_to_seconds(mark):
     return mins * 60 + float(m.group(2))
 
 
+def seconds_to_time(sec):
+    """Format seconds back into m:ss.xx (or ss.xx under a minute)."""
+    if sec is None:
+        return ""
+    mins = int(sec // 60)
+    s = sec - mins * 60
+    return f"{mins}:{s:05.2f}" if mins else f"{s:.2f}"
+
+
+def riegel_predict(t1_sec, d1_m, d2_m):
+    """Riegel endurance formula: T2 = T1 * (D2/D1)^1.06."""
+    if not t1_sec or not d1_m or not d2_m:
+        return None
+    return t1_sec * (d2_m / d1_m) ** 1.06
+
+
+def predict_event(marks, target_event):
+    """Predict a runner's time for target_event from their nearest existing PR
+    (nearest by distance, which Riegel handles most accurately). Returns a
+    formatted string or None if they have no marks to predict from."""
+    if target_event in marks and time_to_seconds(marks[target_event]):
+        return None  # they already have a real mark; no prediction needed
+    td = EVENT_METERS.get(target_event)
+    if not td:
+        return None
+    # find the runner's marks we can use, pick the closest distance
+    candidates = []
+    for ev, mk in marks.items():
+        sec = time_to_seconds(mk)
+        d = EVENT_METERS.get(ev)
+        if sec and d:
+            candidates.append((abs(d - td), d, sec))
+    if not candidates:
+        return None
+    candidates.sort()
+    _, d1, t1 = candidates[0]
+    return seconds_to_time(riegel_predict(t1, d1, td))
+
+
 def axis_seconds(marks, events):
     vals = [time_to_seconds(marks[e]) for e in events
             if e in marks and time_to_seconds(marks[e])]
@@ -287,13 +328,24 @@ def fastest_per_event(selected):
     return rows
 
 
-def build_grid(selected):
+def build_grid(selected, predict=False):
     """Full events x athletes grid: a row for every event ANY selected runner
-    has, a cell per athlete (blank where they don't have that event)."""
+    has, a cell per athlete. Each cell is {'mark': str, 'pred': bool}. When
+    predict=True, blanks are filled with a Riegel estimate flagged pred=True."""
     used = [ev for ev in EVENTS if any(ev in m for _, m in selected)]
     rows = []
     for ev in used:
-        rows.append({"event": ev, "marks": [m.get(ev, "") for _, m in selected]})
+        cells = []
+        for _, m in selected:
+            real = m.get(ev, "")
+            if real:
+                cells.append({"mark": real, "pred": False})
+            elif predict:
+                p = predict_event(m, ev)
+                cells.append({"mark": ("~" + p) if p else "", "pred": bool(p)})
+            else:
+                cells.append({"mark": "", "pred": False})
+        rows.append({"event": ev, "cells": cells})
     return rows
 
 
@@ -422,6 +474,7 @@ PAGE = """
         <a href="{{ url_for('home') }}" class="{{ 'active' if page=='home' }}">Home</a>
         <a href="{{ url_for('athletes_page') }}" class="{{ 'active' if page=='athletes' }}">Athletes</a>
         <a href="{{ url_for('compare') }}" class="{{ 'active' if page=='compare' }}">Compare</a>
+        <a href="{{ url_for('predictor') }}" class="{{ 'active' if page=='predictor' }}">Predictor</a>
         <a href="{{ url_for('add') }}" class="{{ 'active' if page=='add' }}">Add manually</a>
       </nav>
     </header>
@@ -532,6 +585,38 @@ PAGE = """
           <a class="btn btn-ghost" href="{{ url_for('athletes_page') }}">Cancel</a>
         </form>
       </div>
+
+    {% elif page == 'predictor' %}
+      <div class="card" style="max-width:520px; margin-bottom:1.5rem;">
+        <h2 style="margin-bottom:.4rem;">Race time predictor</h2>
+        <p style="font-size:.8rem; color:#5b665e; margin-bottom:1rem;">Enter one time and its event to estimate equivalent times at other distances. Uses the Riegel formula — these are estimates, most accurate for middle-distance to 10k, and a runner's real times depend on their strengths.</p>
+        <form method="get" style="display:flex; gap:.75rem; flex-wrap:wrap; align-items:flex-end;">
+          <div class="field" style="margin-bottom:0; flex:1; min-width:140px;">
+            <label for="time">Time (mm:ss.xx)</label>
+            <input type="text" id="time" name="time" value="{{ in_time or '' }}" placeholder="3:52.86" required>
+          </div>
+          <div class="field" style="margin-bottom:0; flex:1; min-width:140px;">
+            <label for="event">Event</label>
+            <select id="event" name="event">
+              {% for ev in events %}<option value="{{ ev }}" {% if ev==in_event %}selected{% endif %}>{{ ev }}</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn" type="submit">Predict</button>
+        </form>
+      </div>
+      {% if predictions %}
+        <div class="card">
+          <h2 style="font-size:1rem; margin-bottom:.6rem;">Predicted equivalents from {{ in_time }} {{ in_event }}</h2>
+          <table>
+            <tr style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#5b665e;"><td>Event</td><td style="text-align:right;">Predicted</td></tr>
+            {% for ev, pt in predictions %}
+              <tr><td style="font-weight:700;">{{ ev }}</td><td style="text-align:right; {% if ev==in_event %}color:var(--lane); font-weight:700;{% endif %}">{{ pt }}{% if ev==in_event %} (entered){% endif %}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% elif predict_error %}
+        <div class="msg">{{ predict_error }}</div>
+      {% endif %}
 
     {% elif page == 'compare' %}
       <div class="filterbar">
@@ -662,7 +747,15 @@ PAGE = """
 
         {% if c.grid %}
           <div class="card" style="margin-bottom:1.5rem; overflow-x:auto;">
-            <h2 style="font-size:1rem; margin-bottom:.6rem;">All events side by side</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; margin-bottom:.6rem;">
+              <h2 style="font-size:1rem;">All events side by side</h2>
+              {% if predict_on %}
+                <a class="btn btn-ghost" style="padding:.3rem .7rem; font-size:.7rem;" href="{{ url_for('compare', athlete=selected_names) }}">Hide predicted</a>
+              {% else %}
+                <a class="btn btn-ghost" style="padding:.3rem .7rem; font-size:.7rem;" href="{{ url_for('compare', athlete=selected_names, predict='1') }}">Fill blanks with predictions</a>
+              {% endif %}
+            </div>
+            {% if predict_on %}<p style="font-size:.72rem; color:#5b665e; margin-bottom:.6rem;">Predicted times (shown with ~, in italic) are Riegel estimates from each runner's other PRs — not real marks.</p>{% endif %}
             <table>
               <tr style="font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#5b665e;">
                 <td>Event</td>
@@ -671,7 +764,9 @@ PAGE = """
               {% for row in c.grid %}
                 <tr>
                   <td style="font-weight:700;">{{ row.event }}</td>
-                  {% for mk in row.marks %}<td>{{ mk if mk else '—' }}</td>{% endfor %}
+                  {% for cell in row.cells %}
+                    <td {% if cell.pred %}style="font-style:italic; color:#8a8f86;"{% endif %}>{{ cell.mark if cell.mark else '—' }}</td>
+                  {% endfor %}
                 </tr>
               {% endfor %}
             </table>
@@ -904,6 +999,30 @@ def delete(name):
     return redirect(url_for("athletes_page"))
 
 
+@app.route("/predictor")
+def predictor():
+    in_time = request.args.get("time", "").strip()
+    in_event = request.args.get("event", "1500m")
+    predictions = None
+    predict_error = None
+    if in_time:
+        t1 = time_to_seconds(in_time)
+        d1 = EVENT_METERS.get(in_event)
+        if not t1 or not d1:
+            predict_error = "Couldn't read that time. Use a format like 3:52.86 or 14:20.50."
+        else:
+            predictions = []
+            for ev in EVENTS:
+                d2 = EVENT_METERS[ev]
+                if ev == in_event:
+                    predictions.append((ev, in_time))
+                else:
+                    predictions.append((ev, seconds_to_time(riegel_predict(t1, d1, d2))))
+    return render_template_string(PAGE, page="predictor", events=EVENTS,
+                                  in_time=in_time, in_event=in_event,
+                                  predictions=predictions, predict_error=predict_error)
+
+
 @app.route("/compare")
 def compare():
     athletes = load_athletes()
@@ -921,6 +1040,7 @@ def compare():
             selected_names.append(v)
 
     comparison = None
+    predict_on = request.args.get("predict") == "1"
     if len(selected_names) >= 2:
         try:
             selected = [(n, athletes[n]["marks"]) for n in selected_names]
@@ -945,14 +1065,14 @@ def compare():
                 summary_kind = "fastest"
             comparison = {"labels": labels, "series": series,
                           "summary": summary, "summary_kind": summary_kind,
-                          "grid": build_grid(selected)}
+                          "grid": build_grid(selected, predict=predict_on)}
         except Exception as e:
             print("compare error:", e)
             comparison = None
 
     return render_template_string(PAGE, page="compare", names=names,
                                   selected_names=selected_names, c=comparison,
-                                  cat_filter=cat_filter)
+                                  cat_filter=cat_filter, predict_on=predict_on)
 
 
 if __name__ == "__main__":
